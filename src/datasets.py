@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 import torch.utils.data as torch_data
 
+IMAGE_SIZE = 176
 
 class MriDataset(torch_data.Dataset):
 
@@ -85,8 +86,8 @@ class MriDataset(torch_data.Dataset):
             warnings.warn(
                 f"File {path_scan} or {path_mask} does not exist. Make sure you run this code on the cluster. Returning a "
                 f"black image instead.", UserWarning)
-            image = torch.ones((1, 160, 160))
-            mask = torch.zeros((32, 160, 160))
+            image = torch.ones((1, IMAGE_SIZE, IMAGE_SIZE))
+            mask = torch.zeros((32, IMAGE_SIZE, IMAGE_SIZE))
             result = [image, mask]
             return result, label
 
@@ -102,23 +103,19 @@ class MriDataset(torch_data.Dataset):
             image = scan[:, scan.shape[1] // 2]
             mask = scan_mask[:, scan_mask.shape[1] // 2]
 
-        shrunken_image = image[11:171, 11:171]
+        offset = (len(image) - IMAGE_SIZE) // 2
+        shrunken_image = image[offset:offset+IMAGE_SIZE]
         shrunken_image = torch.tensor(shrunken_image, dtype=torch.float32)
 
         top_percentile = torch.quantile(shrunken_image, 0.98, interpolation='lower')
         shrunken_image = torch.clamp(shrunken_image, max=top_percentile)
-        # max_value = torch.max(shrunken_image)
-        # normalized_image = shrunken_image / max_value
 
         mean = shrunken_image.mean()
         std = shrunken_image.std()
         normalized_image = (shrunken_image - mean) / (std + 1e-7)
         stacked_image = torch.stack([normalized_image], dim=0)
 
-        # if self.transform is not None:
-        #     stacked_image = self.transform(stacked_image)
-
-        shrunken_mask = mask[11:171, 11:171]
+        shrunken_mask = mask[offset:offset+IMAGE_SIZE, offset:offset+IMAGE_SIZE]
         shrunken_mask = torch.tensor(shrunken_mask, dtype=torch.long)
 
         # for the masks, we will encode the values as categorical, using one-hot encodings
