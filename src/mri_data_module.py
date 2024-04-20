@@ -15,10 +15,6 @@ class MriDataModule(pl.LightningDataModule):
         self.save_hyperparameters()
         self.data = pd.read_csv(data_dir)
     
-        nan_count = self.data['CDGLOBAL'].isna().sum()
-        print(f"Number of NaN values in CDGLOBAL: {nan_count}. Removing those before creating the datasets.")
-        self.data = self.data.dropna(subset=['CDGLOBAL'])
-
         self.subjects = self.data['PTID'].unique()
 
         self.train_subjects, self.val_subjects, self.test_subjects = self.split_subjectwise()
@@ -26,7 +22,7 @@ class MriDataModule(pl.LightningDataModule):
     def setup(self, stage: str):
         pass
 
-    def train_dataloader(self, no_mci: bool = False, apply_normalization=True, use_demographics: bool = False):
+    def train_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
         train_data = self.data[self.data['PTID'].isin(self.train_subjects)]       
 
         if no_mci:
@@ -48,7 +44,7 @@ class MriDataModule(pl.LightningDataModule):
             drop_last=True 
         )
 
-    def val_dataloader(self, no_mci: bool = False, apply_normalization=True, use_demographics: bool = False):
+    def val_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
         val_data = self.data[self.data['PTID'].isin(self.val_subjects)]
 
         if no_mci:
@@ -67,7 +63,7 @@ class MriDataModule(pl.LightningDataModule):
             num_workers=5,
         )
 
-    def test_dataloader(self, no_mci: bool = False, apply_normalization=True, use_demographics: bool = False):
+    def test_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
         test_data = self.data[self.data['PTID'].isin(self.test_subjects)]
              
         if no_mci:
