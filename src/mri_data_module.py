@@ -1,8 +1,7 @@
 import pandas as pd
 import pytorch_lightning as pl
-import torch
 from torch.utils.data import DataLoader
-from torchvision import transforms
+import random
 
 from datasets import MriDataset
 
@@ -94,16 +93,31 @@ class MriDataModule(pl.LightningDataModule):
     def teardown(self, stage: str):
         pass
 
-    def split_subjectwise(self, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
+    def split_subjectwise(self, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, kfolds=1, selected_fold=0):
+        """
+        Args:
+            train_ratio (float): The ratio of subjects to include in the train set.
+            val_ratio (float): The ratio of subjects to include in the validation set.
+            test_ratio (float): The ratio of subjects to include in the test set.
+            kfolds (int): The number of folds for cross-validation.
+            selected_fold (int): The selected fold for cross-validation.
 
+        Returns:
+            tuple: A tuple containing the train subjects, validation subjects, and test subjects.
+        """
         if train_ratio + val_ratio + test_ratio != 1.0:
             raise ValueError("The sum of train_ratio, val_ratio, and test_ratio should be equal to 1.0.")
+
 
         total_subjects = len(self.subjects)
         indices = list(range(total_subjects))
 
         train_size = int(train_ratio * total_subjects)
         val_size = int(val_ratio * total_subjects)
+        train_val_indices = indices[:train_size + val_size] 
+
+        # shuffle the list
+        random.shuffle(train_val_indices)
 
         train_indices = indices[:train_size]
         val_indices = indices[train_size:train_size + val_size]
