@@ -40,7 +40,7 @@ class VAE(LightningModule):
 
     def __init__(
             self,
-            input_height: int = 160,
+            input_height: int = 176,
             enc_type: str = "resnet18",
             first_conv: bool = False,
             maxpool1: bool = False,
