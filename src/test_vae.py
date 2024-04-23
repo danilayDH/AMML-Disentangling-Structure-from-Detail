@@ -4,6 +4,8 @@ import pytorch_lightning.loggers
 import torch
 from pytorch_lightning import Trainer
 
+from torch.nn.funtional import mse_loss
+
 from basic_vae_module import VAE
 from mri_data_module import MriDataModule
 
