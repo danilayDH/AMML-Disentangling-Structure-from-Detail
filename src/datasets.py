@@ -66,7 +66,8 @@ class MriDataset(torch_data.Dataset):
         elif dx == "Dementia":
             label = 1
         else:
-            warnings.warn("DX must be either CN or Dementia, not " + dx)
+            pass
+            # warnings.warn("DX must be either CN or Dementia, not " + dx)
 
         if self.use_demographics:
             sex = torch.tensor(1.0 if row['Sex'] == 'M' else 0.0, dtype=torch.float32)  # Convert 'M' to 1.0 (male) and 'F' to 0.0 (female)
