@@ -66,7 +66,8 @@ class MriDataset(torch_data.Dataset):
         elif dx == "Dementia":
             label = 1
         else:
-            warnings.warn("DX must be either CN or Dementia, not " + dx)
+            pass
+            # warnings.warn("DX must be either CN or Dementia, not " + dx)
 
         if self.use_demographics:
             sex = torch.tensor(1.0 if row['Sex'] == 'M' else 0.0, dtype=torch.float32)  # Convert 'M' to 1.0 (male) and 'F' to 0.0 (female)
@@ -104,7 +105,7 @@ class MriDataset(torch_data.Dataset):
             mask = scan_mask[:, scan_mask.shape[1] // 2]
 
         offset = (len(image) - IMAGE_SIZE) // 2
-        shrunken_image = image[offset:offset+IMAGE_SIZE]
+        shrunken_image = image[offset:offset+IMAGE_SIZE, offset:offset+IMAGE_SIZE]
         shrunken_image = torch.tensor(shrunken_image, dtype=torch.float32)
 
         top_percentile = torch.quantile(shrunken_image, 0.98, interpolation='lower')

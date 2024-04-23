@@ -1,17 +1,29 @@
 import pandas as pd
 import pytorch_lightning as pl
-import torch
 from torch.utils.data import DataLoader
-from torchvision import transforms
+from sklearn.model_selection import KFold
 
 from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32):
+    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
+        """
+        Args:
+            data_dir (str): The path to the CSV file containing the data.
+            batch_size (int): The batch size for the data loaders.
+            test_ratio (float): The ratio of subjects to include in the test set. (Default: 0.20)
+            num_folds (int): The number of folds to use for cross-validation. (Default: 5)
+            fold (int): The fold to use for cross-validation. (Must be within the range [0, num_folds-1])
+        """
+        assert fold in range(num_folds), "Fold must be within the range [0, num_folds-1]."
+
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
+        self.fold = fold
+        self.num_folds = num_folds
+        self.test_ratio = test_ratio
         self.save_hyperparameters()
         self.data = pd.read_csv(data_dir)
     
@@ -94,23 +106,33 @@ class MriDataModule(pl.LightningDataModule):
     def teardown(self, stage: str):
         pass
 
-    def split_subjectwise(self, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
+    def split_subjectwise(self):
+        """
+        Returns:
+            tuple: A tuple containing the train subjects, validation subjects, and test subjects taking cross validation into account.
+        """
 
-        if train_ratio + val_ratio + test_ratio != 1.0:
-            raise ValueError("The sum of train_ratio, val_ratio, and test_ratio should be equal to 1.0.")
+        train_val_ratio = 1 - self.test_ratio
+
 
         total_subjects = len(self.subjects)
         indices = list(range(total_subjects))
+        train_val_size = int(train_val_ratio * total_subjects)
 
-        train_size = int(train_ratio * total_subjects)
-        val_size = int(val_ratio * total_subjects)
+        train_val_indices = indices[:train_val_size]
 
-        train_indices = indices[:train_size]
-        val_indices = indices[train_size:train_size + val_size]
-        test_indices = indices[train_size + val_size:]
 
-        train_subjects = self.subjects[train_indices]
-        val_subjects = self.subjects[val_indices]
+        kfold = KFold(n_splits=self.num_folds, shuffle=False)
+
+        train_subjects = []
+        val_subjects = []
+        test_subjects = []
+        for i, (train_indices, val_indices) in enumerate(kfold.split(train_val_indices)):
+            if i == self.fold:
+                train_subjects = self.subjects[train_indices]
+                val_subjects = self.subjects[val_indices]
+                break
+        test_indices = indices[train_val_size:]
         test_subjects = self.subjects[test_indices]
 
         return train_subjects, val_subjects, test_subjects
