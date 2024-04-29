@@ -190,6 +190,9 @@ class VAE(LightningModule):
         x, y = batch
         z, x_hat, p, q = self._run_step(x)
 
+        print("Shape of x_hat (input):", x_hat.shape)
+        print("Shape of x[0] (target):", x[0].shape)
+
         recon_loss = F.mse_loss(x_hat, x[0], reduction="mean")
 
         kl = torch.distributions.kl_divergence(q, p)

@@ -136,3 +136,4 @@ class MriDataModule(pl.LightningDataModule):
         test_subjects = self.subjects[test_indices]
 
         return train_subjects, val_subjects, test_subjects
+

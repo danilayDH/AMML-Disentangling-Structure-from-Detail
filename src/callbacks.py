@@ -29,5 +29,5 @@ class ReconstructionsCallback(Callback):
         masks = masks.to(pl_module.device)
 
         reconstructions = pl_module.forward([images, masks])
-
+        
         log_images_to_wandb(images, reconstructions, trainer.current_epoch)

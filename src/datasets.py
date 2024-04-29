@@ -135,4 +135,7 @@ class MriDataset(torch_data.Dataset):
 
         result = [stacked_image, mask_tensor]
 
+        # Print the spatial dimensions of the images in stacked_image
+        # print("Spatial dimensions of the images in stacked_image:", shrunken_image.shape)
+
         return result, label

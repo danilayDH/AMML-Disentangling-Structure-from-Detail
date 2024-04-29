@@ -27,6 +27,12 @@ def cli_main():
                        model_class=VAE)
 
     data_module = cli.datamodule
+
+    # Get the spatial dimensions of the training dataset
+    # train_dataset = data_module.train_dataloader().dataset
+    # spatial_dimensions = train_dataset[0][0][0].shape
+    # print("Spatial dimensions of the images in the training dataset:", spatial_dimensions)
+
     reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
     checkpoint_dir = os.path.join("checkpoints", logger.experiment.id)
     checkpoint_callback = ModelCheckpoint(monitor="val/recon/loss", mode="min", save_top_k=3, save_last=True,
