@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=train_vae
 #SBATCH --mail-type=FAIL,ARRAY_TASKS
-#SBATCH --mail-user=jacob.schaefer@student.hpi.de
+#SBATCH --mail-user=daniela.layer@student.hpi.de
 #SBATCH --partition=gpupro
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
