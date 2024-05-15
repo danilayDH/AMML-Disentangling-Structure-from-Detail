@@ -1,5 +1,6 @@
 import pandas as pd
 import pytorch_lightning as pl
+import numpy as np
 from torch.utils.data import DataLoader
 from sklearn.model_selection import KFold
 
@@ -112,27 +113,34 @@ class MriDataModule(pl.LightningDataModule):
             tuple: A tuple containing the train subjects, validation subjects, and test subjects taking cross validation into account.
         """
 
-        train_val_ratio = 1 - self.test_ratio
-
-
         total_subjects = len(self.subjects)
         indices = list(range(total_subjects))
-        train_val_size = int(train_val_ratio * total_subjects)
 
-        train_val_indices = indices[:train_val_size]
+        # Determine test set size
+        test_size = int(self.test_ratio * total_subjects)
 
+        # Randomly select test_subjects
+        test_indices = np.random.choice(indices, size=test_size, replace=False)
+        test_subjects = self.subjects[test_indices]
+
+        # Remove test_subjects from the list  subjects
+        remaining_subjects = np.delete(self.subjects, test_indices)
 
         kfold = KFold(n_splits=self.num_folds, shuffle=False)
 
+        train_val_indices = np.where(np.isin(self.subjects, remaining_subjects))[0]
+
         train_subjects = []
         val_subjects = []
-        test_subjects = []
         for i, (train_indices, val_indices) in enumerate(kfold.split(train_val_indices)):
             if i == self.fold:
                 train_subjects = self.subjects[train_indices]
                 val_subjects = self.subjects[val_indices]
                 break
-        test_indices = indices[train_val_size:]
-        test_subjects = self.subjects[test_indices]
+        
+         # Print out the lengths of train_subjects, val_subjects, and test_subjects
+        print("Number of subjects in train set:", len(train_subjects))
+        print("Number of subjects in validation set:", len(val_subjects))
+        print("Number of subjects in test set:", len(test_subjects))
 
         return train_subjects, val_subjects, test_subjects
