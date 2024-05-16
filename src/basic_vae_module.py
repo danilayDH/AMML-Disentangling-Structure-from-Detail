@@ -152,6 +152,8 @@ class VAE(LightningModule):
     def forward_to_latent(self, x):
         images = x[0]
         masks = x[1]
+        print("VAE forward to latent: Shape of stacked_image", images.shape)
+
         enc_in = images
         if self.use_segmentation_masks == "in_encoder":
             enc_in = torch.cat((images, masks), dim=1)
