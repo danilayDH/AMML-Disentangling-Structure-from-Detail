@@ -18,6 +18,16 @@ def calculate_snr(image1, image2):
     noise = torch.sum((image1 - image2) ** 2)
     return 10 * torch.log10(signal / noise)
 
+def calculate_metrics(images, reconstructions):
+    mse_list = []
+    snr_list = []
+    for i in range(len(images)):
+        mse = calculate_mse(images[i], reconstructions[i])
+        snr = calculate_snr(images[i], reconstructions[i])
+        mse_list.append(mse)
+        snr_list.append(snr)
+    return torch.stack(mse_list).mean().item(), torch.stack(snr_list).mean().item()
+
 def cli_main():
 
     torch.set_float32_matmul_precision('medium')
@@ -58,8 +68,8 @@ def cli_main():
         data_module.setup(stage='fit')
 
         # Add ReconstructionsCallback
-        reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
-        cli.trainer.callbacks.append(reconstructions_callback)
+        #reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
+        #cli.trainer.callbacks.append(reconstructions_callback)
 
         # Add ModelCheckpoint
         checkpoint_dir = os.path.join("checkpoints", logger.experiment.id)

@@ -74,6 +74,7 @@ class MriDataModule(pl.LightningDataModule):
             dataset=val_dataset,
             batch_size=self.batch_size,
             num_workers=5,
+            drop_last = True
         )
 
     def test_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
@@ -89,7 +90,11 @@ class MriDataModule(pl.LightningDataModule):
 
         test_dataset = MriDataset(test_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
         print("Test dataset size: " + str(len(test_data)))
-        return DataLoader(test_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            test_dataset, 
+            batch_size=self.batch_size,
+            drop_last = True
+            )
 
     def predict_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
         predict_data = self.data[self.data['PTID'].isin(self.val_subjects)]
@@ -102,7 +107,11 @@ class MriDataModule(pl.LightningDataModule):
 
         predict_data = predict_data.reset_index(drop=True)
         predict_dataset = MriDataset(predict_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
-        return DataLoader(predict_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            predict_dataset, 
+            batch_size=self.batch_size,
+            drop_last = True
+            )
 
     def teardown(self, stage: str):
         pass

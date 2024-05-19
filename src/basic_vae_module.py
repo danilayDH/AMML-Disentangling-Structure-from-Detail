@@ -152,13 +152,14 @@ class VAE(LightningModule):
     def forward_to_latent(self, x):
         images = x[0]
         masks = x[1]
-        print("VAE forward to latent: Shape of stacked_image", images.shape)
+        print("VAE in forward_to_latent: Shape of stacked_image", images.shape)
 
         enc_in = images
         if self.use_segmentation_masks == "in_encoder":
             enc_in = torch.cat((images, masks), dim=1)
 
         enc_out = self.encoder(enc_in)
+        print("VAE in forward_to_latent: Encoder output shape:", enc_out.shape)
         mu = self.fc_mu(enc_out)
         log_var = self.fc_var(enc_out)
 

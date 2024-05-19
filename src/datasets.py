@@ -117,9 +117,7 @@ class MriDataset(torch_data.Dataset):
         stacked_image = torch.stack([normalized_image], dim=0)
 
         #stacked_image = stacked_image.unsqueeze(1)
-
-        
-        print("Shape of stacked_image after preprocessing:", stacked_image.shape)
+        #print("Shape of stacked_image after preprocessing:", stacked_image.shape)
 
         shrunken_mask = mask[offset:offset+IMAGE_SIZE, offset:offset+IMAGE_SIZE]
         shrunken_mask = torch.tensor(shrunken_mask, dtype=torch.long)
