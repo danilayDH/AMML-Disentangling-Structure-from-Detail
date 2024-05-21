@@ -60,7 +60,11 @@ def cli_main():
     #cli.trainer.fit(cli.model, datamodule=data_module)
 
     # Iterate over folds
+
     for fold_idx in range(data_module.num_folds):
+        # Print current fold number
+        print(f"Processing fold {fold_idx + 1} of {data_module.num_folds}")
+        
         # Set fold-specific data
         data_module.fold = fold_idx
 
@@ -68,8 +72,8 @@ def cli_main():
         data_module.setup(stage='fit')
 
         # Add ReconstructionsCallback
-        #reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
-        #cli.trainer.callbacks.append(reconstructions_callback)
+        reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
+        cli.trainer.callbacks.append(reconstructions_callback)
 
         # Add ModelCheckpoint
         checkpoint_dir = os.path.join("checkpoints", logger.experiment.id)
@@ -85,14 +89,20 @@ def cli_main():
         mse_list = []
         snr_list = []
 
+        batch_count = 0  # Initialize batch_count
+
         for batch in data_module.val_dataloader():
+            batch_count += 1
+            print(f'Processing batch {batch_count}')
             [stacked_image, mask_tensor], _ = batch
-            #stacked_image = stacked_image.unsqueeze(0)
+            
+
             print("Main: Number of dimensions of stacked_image:", stacked_image.dim())
             print("Main: Shape of stacked_image", stacked_image.shape)
             print("Main: Number of dimensions of mask_tensor:", mask_tensor.dim())
+            
             with torch.no_grad():
-                recon_batch, _ = cli.model(stacked_image)
+                recon_batch = cli.model((stacked_image, mask_tensor))
             
             mse = calculate_mse(stacked_image, recon_batch)
             snr = calculate_snr(stacked_image, recon_batch)

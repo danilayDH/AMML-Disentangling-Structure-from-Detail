@@ -142,6 +142,12 @@ class VAE(LightningModule):
     def forward(self, x):
         p, q, z = self.forward_to_latent(x)
         masks = x[1]
+        print("Input shape:", x[0].shape)
+        print("Latent shape:", z.shape)
+        print("Masks shape:", masks.shape)
+
+        recon_batch = self.decoder([z, masks])
+        print("Reconstructed batch shape:", recon_batch.shape)
         return self.decoder([z, masks])
 
     def _run_step(self, x):
@@ -153,6 +159,13 @@ class VAE(LightningModule):
         images = x[0]
         masks = x[1]
         print("VAE in forward_to_latent: Shape of stacked_image", images.shape)
+
+        if images.dim() == 3:
+            images = images.unsqueeze(0)
+
+
+        print("VAE in forward_to_latent after unsqueeze: Shape of stacked_image", images.shape)
+
 
         enc_in = images
         if self.use_segmentation_masks == "in_encoder":
@@ -210,7 +223,7 @@ class VAE(LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss, logs = self.step(batch, batch_idx)
-        self.log_dict({f"train/{k}": v for k, v in logs.items()}, on_step=True, on_epoch=False)
+        self.log_dict({f"train/{k}": v for k, v in logs.items()}, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def validation_step(self, batch, batch_idx):

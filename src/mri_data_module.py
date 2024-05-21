@@ -49,6 +49,7 @@ class MriDataModule(pl.LightningDataModule):
         train_dataset = MriDataset(train_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
 
         print("Train dataset size: " + str(len(train_data)))
+        print(f"Batch size in train_dataloader: {self.batch_size}") 
         return DataLoader(
             dataset=train_dataset,
             batch_size=self.batch_size,
@@ -70,6 +71,7 @@ class MriDataModule(pl.LightningDataModule):
 
         val_dataset = MriDataset(val_data, axis_view="coronal",use_demographics=use_demographics, transform=None)
         print("Val dataset size: " + str(len(val_data)))
+        print(f"Batch size in val_dataloader: {self.batch_size}") 
         return DataLoader(
             dataset=val_dataset,
             batch_size=self.batch_size,
