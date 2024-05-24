@@ -93,13 +93,7 @@ def cli_main():
 
         for batch in data_module.val_dataloader():
             batch_count += 1
-            print(f'Processing batch {batch_count}')
             [stacked_image, mask_tensor], _ = batch
-            
-
-            print("Main: Number of dimensions of stacked_image:", stacked_image.dim())
-            print("Main: Shape of stacked_image", stacked_image.shape)
-            print("Main: Number of dimensions of mask_tensor:", mask_tensor.dim())
             
             with torch.no_grad():
                 recon_batch = cli.model((stacked_image, mask_tensor))
