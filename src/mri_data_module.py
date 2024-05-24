@@ -1,5 +1,6 @@
 import pandas as pd
 import pytorch_lightning as pl
+import numpy as np
 from torch.utils.data import DataLoader
 from sklearn.model_selection import KFold
 
@@ -7,7 +8,7 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
+    def __init__(self, data_dir: str = "src/adni_small.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
         """
         Args:
             data_dir (str): The path to the CSV file containing the data.
@@ -48,6 +49,7 @@ class MriDataModule(pl.LightningDataModule):
         train_dataset = MriDataset(train_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
 
         print("Train dataset size: " + str(len(train_data)))
+        print(f"Batch size in train_dataloader: {self.batch_size}") 
         return DataLoader(
             dataset=train_dataset,
             batch_size=self.batch_size,
@@ -69,10 +71,12 @@ class MriDataModule(pl.LightningDataModule):
 
         val_dataset = MriDataset(val_data, axis_view="coronal",use_demographics=use_demographics, transform=None)
         print("Val dataset size: " + str(len(val_data)))
+        print(f"Batch size in val_dataloader: {self.batch_size}") 
         return DataLoader(
             dataset=val_dataset,
             batch_size=self.batch_size,
             num_workers=5,
+            drop_last = True
         )
 
     def test_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
@@ -88,7 +92,11 @@ class MriDataModule(pl.LightningDataModule):
 
         test_dataset = MriDataset(test_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
         print("Test dataset size: " + str(len(test_data)))
-        return DataLoader(test_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            test_dataset, 
+            batch_size=self.batch_size,
+            drop_last = True
+            )
 
     def predict_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
         predict_data = self.data[self.data['PTID'].isin(self.val_subjects)]
@@ -101,7 +109,11 @@ class MriDataModule(pl.LightningDataModule):
 
         predict_data = predict_data.reset_index(drop=True)
         predict_dataset = MriDataset(predict_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
-        return DataLoader(predict_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            predict_dataset, 
+            batch_size=self.batch_size,
+            drop_last = True
+            )
 
     def teardown(self, stage: str):
         pass
@@ -112,27 +124,34 @@ class MriDataModule(pl.LightningDataModule):
             tuple: A tuple containing the train subjects, validation subjects, and test subjects taking cross validation into account.
         """
 
-        train_val_ratio = 1 - self.test_ratio
-
-
         total_subjects = len(self.subjects)
         indices = list(range(total_subjects))
-        train_val_size = int(train_val_ratio * total_subjects)
 
-        train_val_indices = indices[:train_val_size]
+        # Determine test set size
+        test_size = int(self.test_ratio * total_subjects)
 
+        # Randomly select test_subjects
+        test_indices = np.random.choice(indices, size=test_size, replace=False)
+        test_subjects = self.subjects[test_indices]
+
+        # Remove test_subjects from the list  subjects
+        remaining_subjects = np.delete(self.subjects, test_indices)
 
         kfold = KFold(n_splits=self.num_folds, shuffle=False)
 
+        train_val_indices = np.where(np.isin(self.subjects, remaining_subjects))[0]
+
         train_subjects = []
         val_subjects = []
-        test_subjects = []
         for i, (train_indices, val_indices) in enumerate(kfold.split(train_val_indices)):
             if i == self.fold:
                 train_subjects = self.subjects[train_indices]
                 val_subjects = self.subjects[val_indices]
                 break
-        test_indices = indices[train_val_size:]
-        test_subjects = self.subjects[test_indices]
+        
+         # Print out the lengths of train_subjects, val_subjects, and test_subjects
+        print("Number of subjects in train set:", len(train_subjects))
+        print("Number of subjects in validation set:", len(val_subjects))
+        print("Number of subjects in test set:", len(test_subjects))
 
         return train_subjects, val_subjects, test_subjects

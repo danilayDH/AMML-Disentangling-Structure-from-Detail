@@ -221,7 +221,9 @@ class ResNetEncoder(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        print("components x shape: ", x.shape)
         x = self.conv1(x)
+        print("components x shape after conv1: ", x.shape)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
