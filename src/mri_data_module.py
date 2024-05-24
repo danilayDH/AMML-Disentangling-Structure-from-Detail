@@ -8,7 +8,7 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni_small.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
+    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
         """
         Args:
             data_dir (str): The path to the CSV file containing the data.
