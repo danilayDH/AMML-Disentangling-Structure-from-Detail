@@ -8,7 +8,7 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
+    def __init__(self, data_dir: str = "src/adni_small.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
         """
         Args:
             data_dir (str): The path to the CSV file containing the data.
@@ -30,10 +30,8 @@ class MriDataModule(pl.LightningDataModule):
     
         self.subjects = self.data['PTID'].unique()
 
-        self.train_subjects, self.val_subjects, self.test_subjects = self.split_subjectwise()
-
     def setup(self, stage: str):
-        pass
+        self.train_subjects, self.val_subjects, self.test_subjects = self.split_subjectwise()
 
     def train_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
         train_data = self.data[self.data['PTID'].isin(self.train_subjects)]       
@@ -150,6 +148,8 @@ class MriDataModule(pl.LightningDataModule):
                 break
         
          # Print out the lengths of train_subjects, val_subjects, and test_subjects
+         
+        print(f"Fold {self.fold + 1}/{self.num_folds}")
         print("Number of subjects in train set:", len(train_subjects))
         print("Number of subjects in validation set:", len(val_subjects))
         print("Number of subjects in test set:", len(test_subjects))

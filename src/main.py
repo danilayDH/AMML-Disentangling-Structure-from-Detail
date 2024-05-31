@@ -59,6 +59,8 @@ def cli_main():
 
     #cli.trainer.fit(cli.model, datamodule=data_module)
 
+    num_folds = data_module.num_folds
+
     # Iterate over folds
 
     for fold_idx in range(data_module.num_folds):
