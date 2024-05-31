@@ -3,7 +3,7 @@
 #SBATCH --job-name=train_vae
 #SBATCH --mail-type=FAIL,ARRAY_TASKS
 #SBATCH --mail-user=daniela.layer@student.hpi.de
-#SBATCH --partition=gpupro
+#SBATCH --partition=gpupro,gpua100
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
@@ -11,5 +11,5 @@
 #SBATCH -o slogs/%x_%A_%a.log
 
 
-srun python src/main.py "$@"
+python src/main.py "$@"
 

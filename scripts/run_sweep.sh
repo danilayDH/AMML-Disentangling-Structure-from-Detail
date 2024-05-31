@@ -3,7 +3,7 @@
 #SBATCH --job-name=sweep_no_mask
 #SBATCH --mail-type=FAIL,ARRAY_TASKS
 #SBATCH --mail-user=daniela.layer@student.hpi.de
-#SBATCH --partition=gpupro
+#SBATCH --partition=gpupro,gpua100
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb

@@ -71,6 +71,9 @@ def cli_main():
         # Reset data loaders
         data_module.setup(stage='fit')
 
+        cli.model = VAE()  # Re-instantiate model for each fold
+        cli.trainer.callbacks = []  # Clear existing callbacks
+
         # Add ReconstructionsCallback
         reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
         cli.trainer.callbacks.append(reconstructions_callback)
@@ -110,6 +113,8 @@ def cli_main():
 
         # Log metrics to Wandb
         wandb.log({'fold': fold_idx, 'avg_mse': avg_mse, 'avg_snr': avg_snr})
+
+        del mse_list, snr_list, avg_mse, avg_snr, recon_batch, batch, stacked_image, mask_tensor
 
 
 if __name__ == '__main__':
