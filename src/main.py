@@ -2,7 +2,7 @@ import os
 import wandb
 
 import pytorch_lightning.loggers
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, TQDMProgressBar
 from pytorch_lightning.cli import LightningCLI
 
 from basic_vae_module import VAE
@@ -40,40 +40,38 @@ def cli_main():
 
     cli = LightningCLI(save_config_callback=None, run=False,
                        trainer_defaults={'logger': logger, 'accelerator': 'auto', 'devices': 1,
-                                         'deterministic': True, 'log_every_n_steps': 50, },
+                                         'deterministic': True, 'log_every_n_steps': 50,
+                                         'callbacks': [TQDMProgressBar(refresh_rate=1)]},
                        datamodule_class=MriDataModule,
                        model_class=VAE)
+    
+    # Print CUDA device information
+    local_rank = os.getenv('LOCAL_RANK', 0)
+    cuda_visible_devices = os.getenv('CUDA_VISIBLE_DEVICES', '[0]')
+    print(f"LOCAL_RANK: {local_rank} - CUDA_VISIBLE_DEVICES: {cuda_visible_devices}")
 
+    
     data_module = cli.datamodule
-    #reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
-    #checkpoint_dir = os.path.join("checkpoints", logger.experiment.id)
-    #checkpoint_callback = ModelCheckpoint(monitor="val/recon/loss", mode="min", save_top_k=3, save_last=True,
-     #                                     dirpath=checkpoint_dir, auto_insert_metric_name=False,
-      #                                    filename="epoch{epoch}-{val/recon/loss:.2f}")
-    #cli.trainer.callbacks.append(reconstructions_callback)
-    #cli.trainer.callbacks.append(checkpoint_callback)
-
-    #seed = cli.config['seed_everything']
-    #if 'seed_everything' not in logger.experiment.config or logger.experiment.config['seed_everything'] is None:
-    #    logger.experiment.config['seed_everything'] = seed
-
-    #cli.trainer.fit(cli.model, datamodule=data_module)
-
     num_folds = data_module.num_folds
 
     # Iterate over folds
-
     for fold_idx in range(data_module.num_folds):
         # Print current fold number
         print(f"Processing fold {fold_idx + 1} of {data_module.num_folds}")
-        
-        # Set fold-specific data
-        data_module.fold = fold_idx
 
+        # Create new data module instance for current fold
+        data_module = MriDataModule(data_dir=data_module.data_dir, batch_size=data_module.batch_size,
+                                    fold=fold_idx, num_folds=num_folds, test_ratio=data_module.test_ratio)
+        
         # Reset data loaders
         data_module.setup(stage='fit')
 
-        cli.model = VAE()  # Re-instantiate model for each fold
+        # Print dataset sizes only once per fold
+        val_loader = data_module.val_dataloader()
+        print(f"Val dataset size: {len(val_loader.dataset)}")
+        print(f"Batch size in val_dataloader: {data_module.batch_size}")
+
+        cli.model = VAE(**cli.model.hparams)  # Re-instantiate model for each fold
         cli.trainer.callbacks = []  # Clear existing callbacks
 
         # Add ReconstructionsCallback
@@ -86,7 +84,8 @@ def cli_main():
                                               dirpath=checkpoint_dir, auto_insert_metric_name=False,
                                               filename="fold_{fold_idx}-epoch{epoch}-{val/recon/loss:.2f}")
         cli.trainer.callbacks.append(checkpoint_callback)
-
+        cli.trainer.callbacks.append(TQDMProgressBar(refresh_rate=1))
+        
         # Fit the model
         trainer = cli.trainer.fit(cli.model, datamodule=data_module)
 

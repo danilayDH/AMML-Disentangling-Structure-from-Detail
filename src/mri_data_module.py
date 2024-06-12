@@ -8,7 +8,7 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni_small.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
+    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
         """
         Args:
             data_dir (str): The path to the CSV file containing the data.
@@ -30,8 +30,17 @@ class MriDataModule(pl.LightningDataModule):
     
         self.subjects = self.data['PTID'].unique()
 
-    def setup(self, stage: str):
         self.train_subjects, self.val_subjects, self.test_subjects = self.split_subjectwise()
+
+        # Print out the lengths of train_subjects, val_subjects, and test_subjects
+         
+        print(f"Fold {self.fold + 1}/{self.num_folds}")
+        print("Number of subjects in train set:", len(self.train_subjects))
+        print("Number of subjects in validation set:", len(self.val_subjects))
+        print("Number of subjects in test set:", len(self.test_subjects))
+
+    def setup(self, stage: str):
+        pass
 
     def train_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
         train_data = self.data[self.data['PTID'].isin(self.train_subjects)]       
@@ -68,13 +77,12 @@ class MriDataModule(pl.LightningDataModule):
         val_data = val_data.reset_index(drop=True)
 
         val_dataset = MriDataset(val_data, axis_view="coronal",use_demographics=use_demographics, transform=None)
-        print("Val dataset size: " + str(len(val_data)))
-        print(f"Batch size in val_dataloader: {self.batch_size}") 
+        #print("Val dataset size: " + str(len(val_data)))
+        #print(f"Batch size in val_dataloader: {self.batch_size}") 
         return DataLoader(
             dataset=val_dataset,
             batch_size=self.batch_size,
-            num_workers=5,
-            drop_last = True
+            num_workers=5
         )
 
     def test_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
@@ -92,8 +100,7 @@ class MriDataModule(pl.LightningDataModule):
         print("Test dataset size: " + str(len(test_data)))
         return DataLoader(
             test_dataset, 
-            batch_size=self.batch_size,
-            drop_last = True
+            batch_size=self.batch_size
             )
 
     def predict_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
@@ -147,11 +154,6 @@ class MriDataModule(pl.LightningDataModule):
                 val_subjects = self.subjects[val_indices]
                 break
         
-         # Print out the lengths of train_subjects, val_subjects, and test_subjects
-         
-        print(f"Fold {self.fold + 1}/{self.num_folds}")
-        print("Number of subjects in train set:", len(train_subjects))
-        print("Number of subjects in validation set:", len(val_subjects))
-        print("Number of subjects in test set:", len(test_subjects))
+        
 
         return train_subjects, val_subjects, test_subjects
