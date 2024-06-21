@@ -44,20 +44,22 @@ def cli_main():
                                          'callbacks': [TQDMProgressBar(refresh_rate=1)]},
                        datamodule_class=MriDataModule,
                        model_class=VAE)
-    
-    # Print CUDA device information
-    local_rank = os.getenv('LOCAL_RANK', 0)
-    cuda_visible_devices = os.getenv('CUDA_VISIBLE_DEVICES', '[0]')
-    print(f"LOCAL_RANK: {local_rank} - CUDA_VISIBLE_DEVICES: {cuda_visible_devices}")
-
-    
+         
+        
     data_module = cli.datamodule
     num_folds = data_module.num_folds
+
+    all_fold_metrics = []
 
     # Iterate over folds
     for fold_idx in range(data_module.num_folds):
         # Print current fold number
         print(f"Processing fold {fold_idx + 1} of {data_module.num_folds}")
+
+        # Create new WandbLogger instance for cuurent fold
+        #wandb_logger = pytorch_lightning.loggers.WandbLogger(project='Brain Disentanglement Dementia', 
+         #                                                    name=f'fold_{fold_idx}',
+          #                                                   save_dir='logs')
 
         # Create new data module instance for current fold
         data_module = MriDataModule(data_dir=data_module.data_dir, batch_size=data_module.batch_size,
@@ -71,11 +73,12 @@ def cli_main():
         print(f"Val dataset size: {len(val_loader.dataset)}")
         print(f"Batch size in val_dataloader: {data_module.batch_size}")
 
-        cli.model = VAE(**cli.model.hparams)  # Re-instantiate model for each fold
+        cli.model = VAE(**cli.model.hparams)  # Re-instantiate model for each fold and pass hyperparameters as keyword arguments
         cli.trainer.callbacks = []  # Clear existing callbacks
+        #cli.trainer.logger = wandb_logger
 
         # Add ReconstructionsCallback
-        reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
+        reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8, fold_idx=fold_idx)
         cli.trainer.callbacks.append(reconstructions_callback)
 
         # Add ModelCheckpoint
@@ -85,10 +88,14 @@ def cli_main():
                                               filename="fold_{fold_idx}-epoch{epoch}-{val/recon/loss:.2f}")
         cli.trainer.callbacks.append(checkpoint_callback)
         cli.trainer.callbacks.append(TQDMProgressBar(refresh_rate=1))
-        
-        # Fit the model
-        trainer = cli.trainer.fit(cli.model, datamodule=data_module)
 
+        # Create new Trainer instance
+        trainer = pytorch_lightning.Trainer(max_epochs=cli.trainer.max_epochs, logger=logger, accelerator='auto', devices=1,
+                             deterministic=True, log_every_n_steps=50, callbacks=cli.trainer.callbacks)
+     
+        # Fit the model
+        trainer = trainer.fit(cli.model, datamodule=data_module)
+        
         # Calculate MSE and SNR
         mse_list = []
         snr_list = []
@@ -108,14 +115,31 @@ def cli_main():
             mse_list.append(mse)
             snr_list.append(snr)
 
-        # Average MSE and SNR across the validation set
+        # Average MSE and SNR across the validation set 
         avg_mse = torch.stack(mse_list).mean().item()
         avg_snr = torch.stack(snr_list).mean().item()
+
+        print("MSE:", mse)
+        print("MSE List:", mse_list)
+        print("Avg MSE:", avg_mse)
+        print("SNR:", snr)
+        print("SNR List:", snr_list)
+        print("Avg SNR:", avg_snr)
 
         # Log metrics to Wandb
         wandb.log({'fold': fold_idx, 'avg_mse': avg_mse, 'avg_snr': avg_snr})
 
-        del mse_list, snr_list, avg_mse, avg_snr, recon_batch, batch, stacked_image, mask_tensor
+        all_fold_metrics.append({'mse': avg_mse, 'snr': avg_snr})
+
+        del recon_batch, batch, stacked_image, mask_tensor
+    
+    # Average metrics across all folds
+    final_avg_mse = sum(f['mse'] for f in all_fold_metrics) / num_folds
+    final_avg_snr = sum(f['snr'] for f in all_fold_metrics) / num_folds
+    
+
+    print(f"Final Average MSE: {final_avg_mse}, Final Average SNR: {final_avg_snr}")
+    wandb.log({'final_avg_mse': final_avg_mse, 'final_avg_snr': final_avg_snr})
 
 
 if __name__ == '__main__':
