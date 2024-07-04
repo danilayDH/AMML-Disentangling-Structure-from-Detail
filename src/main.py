@@ -2,7 +2,7 @@ import os
 import wandb
 
 import pytorch_lightning.loggers
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, TQDMProgressBar
 from pytorch_lightning.cli import LightningCLI
 
 from basic_vae_module import VAE
@@ -40,42 +40,45 @@ def cli_main():
 
     cli = LightningCLI(save_config_callback=None, run=False,
                        trainer_defaults={'logger': logger, 'accelerator': 'auto', 'devices': 1,
-                                         'deterministic': True, 'log_every_n_steps': 50, },
+                                         'deterministic': True, 'log_every_n_steps': 50,
+                                         'callbacks': [TQDMProgressBar(refresh_rate=1)]},
                        datamodule_class=MriDataModule,
                        model_class=VAE)
-
+         
+        
     data_module = cli.datamodule
-    #reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
-    #checkpoint_dir = os.path.join("checkpoints", logger.experiment.id)
-    #checkpoint_callback = ModelCheckpoint(monitor="val/recon/loss", mode="min", save_top_k=3, save_last=True,
-     #                                     dirpath=checkpoint_dir, auto_insert_metric_name=False,
-      #                                    filename="epoch{epoch}-{val/recon/loss:.2f}")
-    #cli.trainer.callbacks.append(reconstructions_callback)
-    #cli.trainer.callbacks.append(checkpoint_callback)
+    num_folds = data_module.num_folds
 
-    #seed = cli.config['seed_everything']
-    #if 'seed_everything' not in logger.experiment.config or logger.experiment.config['seed_everything'] is None:
-    #    logger.experiment.config['seed_everything'] = seed
-
-    #cli.trainer.fit(cli.model, datamodule=data_module)
+    all_fold_metrics = []
 
     # Iterate over folds
-
     for fold_idx in range(data_module.num_folds):
         # Print current fold number
         print(f"Processing fold {fold_idx + 1} of {data_module.num_folds}")
-        
-        # Set fold-specific data
-        data_module.fold = fold_idx
 
+        # Create new WandbLogger instance for cuurent fold
+        #wandb_logger = pytorch_lightning.loggers.WandbLogger(project='Brain Disentanglement Dementia', 
+         #                                                    name=f'fold_{fold_idx}',
+          #                                                   save_dir='logs')
+
+        # Create new data module instance for current fold
+        data_module = MriDataModule(data_dir=data_module.data_dir, batch_size=data_module.batch_size,
+                                    fold=fold_idx, num_folds=num_folds, test_ratio=data_module.test_ratio)
+        
         # Reset data loaders
         data_module.setup(stage='fit')
 
-        cli.model = VAE()  # Re-instantiate model for each fold
+        # Print dataset sizes only once per fold
+        val_loader = data_module.val_dataloader()
+        print(f"Val dataset size: {len(val_loader.dataset)}")
+        print(f"Batch size in val_dataloader: {data_module.batch_size}")
+
+        cli.model = VAE(**cli.model.hparams)  # Re-instantiate model for each fold and pass hyperparameters as keyword arguments
         cli.trainer.callbacks = []  # Clear existing callbacks
+        #cli.trainer.logger = wandb_logger
 
         # Add ReconstructionsCallback
-        reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8)
+        reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8, fold_idx=fold_idx)
         cli.trainer.callbacks.append(reconstructions_callback)
 
         # Add ModelCheckpoint
@@ -84,10 +87,15 @@ def cli_main():
                                               dirpath=checkpoint_dir, auto_insert_metric_name=False,
                                               filename="fold_{fold_idx}-epoch{epoch}-{val/recon/loss:.2f}")
         cli.trainer.callbacks.append(checkpoint_callback)
+        cli.trainer.callbacks.append(TQDMProgressBar(refresh_rate=1))
 
+        # Create new Trainer instance
+        trainer = pytorch_lightning.Trainer(max_epochs=cli.trainer.max_epochs, logger=logger, accelerator='auto', devices=1,
+                             deterministic=True, log_every_n_steps=50, callbacks=cli.trainer.callbacks)
+     
         # Fit the model
-        trainer = cli.trainer.fit(cli.model, datamodule=data_module)
-
+        trainer = trainer.fit(cli.model, datamodule=data_module)
+        
         # Calculate MSE and SNR
         mse_list = []
         snr_list = []
@@ -107,14 +115,31 @@ def cli_main():
             mse_list.append(mse)
             snr_list.append(snr)
 
-        # Average MSE and SNR across the validation set
+        # Average MSE and SNR across the validation set 
         avg_mse = torch.stack(mse_list).mean().item()
         avg_snr = torch.stack(snr_list).mean().item()
+
+        print("MSE:", mse)
+        print("MSE List:", mse_list)
+        print("Avg MSE:", avg_mse)
+        print("SNR:", snr)
+        print("SNR List:", snr_list)
+        print("Avg SNR:", avg_snr)
 
         # Log metrics to Wandb
         wandb.log({'fold': fold_idx, 'avg_mse': avg_mse, 'avg_snr': avg_snr})
 
-        del mse_list, snr_list, avg_mse, avg_snr, recon_batch, batch, stacked_image, mask_tensor
+        all_fold_metrics.append({'mse': avg_mse, 'snr': avg_snr})
+
+        del recon_batch, batch, stacked_image, mask_tensor
+    
+    # Average metrics across all folds
+    final_avg_mse = sum(f['mse'] for f in all_fold_metrics) / num_folds
+    final_avg_snr = sum(f['snr'] for f in all_fold_metrics) / num_folds
+    
+
+    print(f"Final Average MSE: {final_avg_mse}, Final Average SNR: {final_avg_snr}")
+    wandb.log({'final_avg_mse': final_avg_mse, 'final_avg_snr': final_avg_snr})
 
 
 if __name__ == '__main__':
