@@ -8,7 +8,7 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 5, test_ratio: float = 0.20):
+    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 1, test_ratio: float = 0.20):
         """
         Args:
             data_dir (str): The path to the CSV file containing the data.
@@ -66,6 +66,9 @@ class MriDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
+        if self.num_folds == 1:
+            return None
+
         val_data = self.data[self.data['PTID'].isin(self.val_subjects)]
 
         if no_mci:
@@ -142,18 +145,18 @@ class MriDataModule(pl.LightningDataModule):
         # Remove test_subjects from the list  subjects
         remaining_subjects = np.delete(self.subjects, test_indices)
 
-        kfold = KFold(n_splits=self.num_folds, shuffle=False)
-
-        train_val_indices = np.where(np.isin(self.subjects, remaining_subjects))[0]
-
-        train_subjects = []
-        val_subjects = []
-        for i, (train_indices, val_indices) in enumerate(kfold.split(train_val_indices)):
-            if i == self.fold:
-                train_subjects = self.subjects[train_indices]
-                val_subjects = self.subjects[val_indices]
-                break
+        if self.num_folds == 1:
+            train_subjects = remaining_subjects
+            val_subjects = []
+        else: 
+            kfold = KFold(n_splits=self.num_folds, shuffle=False)
+            train_val_indices = np.where(np.isin(self.subjects, remaining_subjects))[0]
+            train_subjects = []
+            val_subjects = []
+            for i, (train_indices, val_indices) in enumerate(kfold.split(train_val_indices)):
+                if i == self.fold:
+                    train_subjects = self.subjects[train_indices]
+                    val_subjects = self.subjects[val_indices]
+                    break
         
-        
-
         return train_subjects, val_subjects, test_subjects

@@ -56,11 +56,6 @@ def cli_main():
         # Print current fold number
         print(f"Processing fold {fold_idx + 1} of {data_module.num_folds}")
 
-        # Create new WandbLogger instance for cuurent fold
-        #wandb_logger = pytorch_lightning.loggers.WandbLogger(project='Brain Disentanglement Dementia', 
-         #                                                    name=f'fold_{fold_idx}',
-          #                                                   save_dir='logs')
-
         # Create new data module instance for current fold
         data_module = MriDataModule(data_dir=data_module.data_dir, batch_size=data_module.batch_size,
                                     fold=fold_idx, num_folds=num_folds, test_ratio=data_module.test_ratio)
@@ -70,23 +65,38 @@ def cli_main():
 
         # Print dataset sizes only once per fold
         val_loader = data_module.val_dataloader()
-        print(f"Val dataset size: {len(val_loader.dataset)}")
-        print(f"Batch size in val_dataloader: {data_module.batch_size}")
+        if val_loader is not None:
+            print(f"Val dataset size: {len(val_loader.dataset)}")
+        print(f"Batch size is: {data_module.batch_size}")
 
         cli.model = VAE(**cli.model.hparams)  # Re-instantiate model for each fold and pass hyperparameters as keyword arguments
         cli.trainer.callbacks = []  # Clear existing callbacks
-        #cli.trainer.logger = wandb_logger
 
+        # Determine which dataloader to use for reconstructions
+        recon_dataloader = data_module.val_dataloader() if data_module.num_folds > 1 else data_module.train_dataloader()
+       
         # Add ReconstructionsCallback
-        reconstructions_callback = ReconstructionsCallback(dataloader=data_module.val_dataloader(), num_images=8, fold_idx=fold_idx)
+        reconstructions_callback = ReconstructionsCallback(
+            dataloader=recon_dataloader, 
+            num_images=8, 
+            fold_idx=fold_idx)
         cli.trainer.callbacks.append(reconstructions_callback)
 
         # Add ModelCheckpoint
         checkpoint_dir = os.path.join("checkpoints", logger.experiment.id)
-        checkpoint_callback = ModelCheckpoint(monitor="val/recon/loss", mode="min", save_top_k=3, save_last=True,
-                                              dirpath=checkpoint_dir, auto_insert_metric_name=False,
-                                              filename="fold_{fold_idx}-epoch{epoch}-{val/recon/loss:.2f}")
-        cli.trainer.callbacks.append(checkpoint_callback)
+        
+        #checkpoint_callback = ModelCheckpoint(monitor="val/recon/loss", mode="min", save_top_k=3, save_last=True,
+         #                                     dirpath=checkpoint_dir, auto_insert_metric_name=False,
+          #                                    filename="fold_{fold_idx}-epoch{epoch}-{val/recon/loss:.2f}")
+        #cli.trainer.callbacks.append(checkpoint_callback)
+        
+        checkpoint_callback_last = ModelCheckpoint(
+            save_last=True, 
+            dirpath=checkpoint_dir,
+            filename=f"fold_{fold_idx}-last"
+        )
+        cli.trainer.callbacks.append(checkpoint_callback_last)
+        
         cli.trainer.callbacks.append(TQDMProgressBar(refresh_rate=1))
 
         # Create new Trainer instance
@@ -96,50 +106,52 @@ def cli_main():
         # Fit the model
         trainer = trainer.fit(cli.model, datamodule=data_module)
         
-        # Calculate MSE and SNR
-        mse_list = []
-        snr_list = []
+        if val_loader is not None:
+            # Calculate MSE and SNR
+            mse_list = []
+            snr_list = []
 
-        batch_count = 0  # Initialize batch_count
+            batch_count = 0  # Initialize batch_count
 
-        for batch in data_module.val_dataloader():
-            batch_count += 1
-            [stacked_image, mask_tensor], _ = batch
-            
-            with torch.no_grad():
-                recon_batch = cli.model((stacked_image, mask_tensor))
-            
-            mse = calculate_mse(stacked_image, recon_batch)
-            snr = calculate_snr(stacked_image, recon_batch)
+            for batch in data_module.val_dataloader():
+                batch_count += 1
+                [stacked_image, mask_tensor], _ = batch
+                
+                with torch.no_grad():
+                    recon_batch = cli.model((stacked_image, mask_tensor))
+                
+                mse = calculate_mse(stacked_image, recon_batch)
+                snr = calculate_snr(stacked_image, recon_batch)
 
-            mse_list.append(mse)
-            snr_list.append(snr)
+                mse_list.append(mse)
+                snr_list.append(snr)
 
-        # Average MSE and SNR across the validation set 
-        avg_mse = torch.stack(mse_list).mean().item()
-        avg_snr = torch.stack(snr_list).mean().item()
+            # Average MSE and SNR across the validation set 
+            avg_mse = torch.stack(mse_list).mean().item()
+            avg_snr = torch.stack(snr_list).mean().item()
 
-        print("MSE:", mse)
-        print("MSE List:", mse_list)
-        print("Avg MSE:", avg_mse)
-        print("SNR:", snr)
-        print("SNR List:", snr_list)
-        print("Avg SNR:", avg_snr)
+            print("MSE:", mse)
+            print("MSE List:", mse_list)
+            print("Avg MSE:", avg_mse)
+            print("SNR:", snr)
+            print("SNR List:", snr_list)
+            print("Avg SNR:", avg_snr)
 
-        # Log metrics to Wandb
-        wandb.log({'fold': fold_idx, 'avg_mse': avg_mse, 'avg_snr': avg_snr})
+            # Log metrics to Wandb
+            wandb.log({'fold': fold_idx, 'avg_mse': avg_mse, 'avg_snr': avg_snr})
 
-        all_fold_metrics.append({'mse': avg_mse, 'snr': avg_snr})
+            all_fold_metrics.append({'mse': avg_mse, 'snr': avg_snr})
 
-        del recon_batch, batch, stacked_image, mask_tensor
+            del recon_batch, batch, stacked_image, mask_tensor
     
-    # Average metrics across all folds
-    final_avg_mse = sum(f['mse'] for f in all_fold_metrics) / num_folds
-    final_avg_snr = sum(f['snr'] for f in all_fold_metrics) / num_folds
-    
+    if all_fold_metrics:
+        # Average metrics across all folds
+        final_avg_mse = sum(f['mse'] for f in all_fold_metrics) / num_folds
+        final_avg_snr = sum(f['snr'] for f in all_fold_metrics) / num_folds
+        
 
-    print(f"Final Average MSE: {final_avg_mse}, Final Average SNR: {final_avg_snr}")
-    wandb.log({'final_avg_mse': final_avg_mse, 'final_avg_snr': final_avg_snr})
+        print(f"Final Average MSE: {final_avg_mse}, Final Average SNR: {final_avg_snr}")
+        wandb.log({'final_avg_mse': final_avg_mse, 'final_avg_snr': final_avg_snr})
 
 
 if __name__ == '__main__':
