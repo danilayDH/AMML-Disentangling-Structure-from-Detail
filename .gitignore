@@ -1,0 +1,12 @@
+# Ignore Python cache files
+src/__pycache__/
+*.py[cod]
+
+# Ignore checkpoints directory
+checkpoints/
+
+# Ignore logs directory
+logs/
+
+# Ignore slogs directory
+slogs/
