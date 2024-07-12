@@ -20,7 +20,7 @@ class DownstreamClassifier:
         for param in self.vae.parameters():
             param.requires_grad = False
 
-        self.data_module = MriDataModule(data_dir="src/adni.csv", batch_size=16)
+        self.data_module = MriDataModule(data_dir="src/adni.csv", batch_size=16, downstream_task=True)
 
     def prepare_data(self, data_loader, use_demographics=False):
         X = []
@@ -49,7 +49,10 @@ class DownstreamClassifier:
         X_train, y_train = self.prepare_data(train_dataloader, use_demographics=True)
         X_val, y_val = self.prepare_data(val_dataloader, use_demographics=True)
         X_test, y_test = self.prepare_data(test_dataloader, use_demographics=True)
+        
         clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+        
+       
         y_pred_val = clf.predict(X_val)
         y_pred_train = clf.predict(X_train)
         print("Predictions on Validation Set:", y_pred_val)
@@ -59,11 +62,11 @@ class DownstreamClassifier:
         print("Balanced Accuracy on Validation Set:", balanced_acc)
         balanced_acc = balanced_accuracy_score(y_train, y_pred_train)
         print("Balanced Accuracy on Train Set:", balanced_acc)
-        if use_test_set:
-            y_pred_test = clf.predict(X_test)
-            balanced_acc = balanced_accuracy_score(y_test, y_pred_test)
-            print("Balanced Accuracy on Test Set:", balanced_acc)
+        y_pred_test = clf.predict(X_test)
+        balanced_acc = balanced_accuracy_score(y_test, y_pred_test)
+        print("Balanced Accuracy on Test Set:", balanced_acc)
         y_pred_prob = clf.predict_proba(X_val)
+        
         np.save(self.checkpoint + "_demographics_predict_probs.npy", y_pred_prob)
         print("Prediction probabilities on Validation Set:", y_pred_prob)
 
@@ -81,25 +84,32 @@ class DownstreamClassifier:
         X_train, y_train = self.prepare_data(train_dataloader, use_demographics=False)
         X_val, y_val = self.prepare_data(val_dataloader, use_demographics=False)
         X_test, y_test = self.prepare_data(test_dataloader, use_demographics=False)
+        
         clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+        
+        # Evaluate on training set
         y_pred_train = clf.predict(X_train)
         score = clf.score(X_train, y_train)
+        print("VAE - Train Set Results:")
         print("Mean accuracy on Training Set:", score)
         balanced_acc = balanced_accuracy_score(y_train, y_pred_train)
         print("Balanced Accuracy on Training Set:", balanced_acc)
 
+        # Evaluate on validation set
         y_pred_val = clf.predict(X_val)
         score = clf.score(X_val, y_val)
+        print("\nVAE - Validation Set Results:")
         print("Mean accuracy on Validation Set:", score)
         balanced_acc = balanced_accuracy_score(y_val, y_pred_val)
         print("Balanced Accuracy on Validation Set:", balanced_acc)
 
-        if use_test_set:
-            y_pred_test = clf.predict(X_test)
-            score = clf.score(X_test, y_test)
-            print("Mean accuracy on Test Set:", score)
-            balanced_acc = balanced_accuracy_score(y_test, y_pred_test)
-            print("Balanced Accuracy on Test Set:", balanced_acc)
+        # Evaluate on test set
+        y_pred_test = clf.predict(X_test)
+        score = clf.score(X_test, y_test)
+        print("\nVAE - Test Set Results:")
+        print("Mean accuracy on Test Set:", score)
+        balanced_acc = balanced_accuracy_score(y_test, y_pred_test)
+        print("Balanced Accuracy on Test Set:", balanced_acc)
 
         # y_pred_prob = clf.predict_proba(X_val)
         # y_pred_prob = y_pred_prob - demographics_pred_prob
@@ -113,5 +123,5 @@ if __name__ == '__main__':
     from lightning_fabric.utilities.seed import seed_everything
     seed_everything(176988783, workers=True)
     downstream_task = DownstreamClassifier(args.checkpoint)
-    downstream_task.predict_using_demographics(use_test_set=True)
-    downstream_task.predict_using_vae(use_test_set=True)
+    downstream_task.predict_using_demographics()
+    downstream_task.predict_using_vae()

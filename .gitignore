@@ -10,3 +10,9 @@ logs/
 
 # Ignore slogs directory
 slogs/
+
+# Ignore npy files
+*.npy
+
+# Ignore wandb directory
+wandb/
