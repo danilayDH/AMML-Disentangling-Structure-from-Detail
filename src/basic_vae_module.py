@@ -46,7 +46,7 @@ class VAE(LightningModule):
             maxpool1: bool = False,
             enc_out_dim: int = 512,
             kl_coeff: float = 0.0001,
-            latent_dim: int = 128,
+            latent_dim: int = 64,
             lr: float = 0.0001,
             use_segmentation_masks: str = "no_mask",
             **kwargs,

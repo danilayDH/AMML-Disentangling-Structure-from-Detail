@@ -8,7 +8,8 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 1, test_ratio: float = 0.20):
+    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 1, test_ratio: float = 0.20, 
+                 val_ratio : float = 0.15, downstream_task: bool = False):
         """
         Args:
             data_dir (str): The path to the CSV file containing the data.
@@ -25,6 +26,8 @@ class MriDataModule(pl.LightningDataModule):
         self.fold = fold
         self.num_folds = num_folds
         self.test_ratio = test_ratio
+        self.val_ratio = val_ratio
+        self.downstream_task = downstream_task
         self.save_hyperparameters()
         self.data = pd.read_csv(data_dir)
     
@@ -66,7 +69,7 @@ class MriDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
-        if self.num_folds == 1:
+        if self.num_folds == 1 and not self.downstream_task:
             return None
 
         val_data = self.data[self.data['PTID'].isin(self.val_subjects)]
@@ -146,8 +149,14 @@ class MriDataModule(pl.LightningDataModule):
         remaining_subjects = np.delete(self.subjects, test_indices)
 
         if self.num_folds == 1:
-            train_subjects = remaining_subjects
-            val_subjects = []
+            if self.downstream_task:
+                val_size = int(self.val_ratio * len(remaining_subjects))
+                val_indices = np.random.choice(len(remaining_subjects), size=val_size, replace=False)
+                val_subjects = remaining_subjects[val_indices]
+                train_subjects = np.delete(remaining_subjects, val_indices)
+            else:
+                train_subjects = remaining_subjects
+                val_subjects = []
         else: 
             kfold = KFold(n_splits=self.num_folds, shuffle=False)
             train_val_indices = np.where(np.isin(self.subjects, remaining_subjects))[0]
