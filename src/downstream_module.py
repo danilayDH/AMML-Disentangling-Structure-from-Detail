@@ -25,6 +25,7 @@ class DownstreamClassifier:
     def prepare_data(self, data_loader, use_demographics=False):
         X = []
         y = []
+      
         with torch.no_grad():
             for batch in data_loader:
                 inputs, labels = batch
@@ -40,6 +41,9 @@ class DownstreamClassifier:
                 y.extend(labels.numpy())
         X = np.array(X)
         y = np.array(y)
+
+        print(f"Prepared data X shape: {X.shape}, y shape: {y.shape}")
+
         return X, y
 
     def predict_using_demographics(self, use_test_set: bool=False):
@@ -77,13 +81,29 @@ class DownstreamClassifier:
         else:
             print("Demographics predictions not found.")
             return
+        print("Predict using VAE and demographics:")
+        print("\nLoad demographics:")
+        train_dataloader_dem = self.data_module.train_dataloader(no_mci=True, use_demographics=True)
+        val_dataloader_dem = self.data_module.val_dataloader(no_mci=True, use_demographics=True)
+        test_dataloader_dem = self.data_module.test_dataloader(no_mci=True, use_demographics=True)
 
-        train_dataloader = self.data_module.train_dataloader(no_mci=True)
-        val_dataloader = self.data_module.val_dataloader(no_mci=True)
-        test_dataloader = self.data_module.test_dataloader(no_mci=True)
-        X_train, y_train = self.prepare_data(train_dataloader, use_demographics=False)
-        X_val, y_val = self.prepare_data(val_dataloader, use_demographics=False)
-        X_test, y_test = self.prepare_data(test_dataloader, use_demographics=False)
+        X_train_dem, y_train = self.prepare_data(train_dataloader_dem, use_demographics=True)
+        X_val_dem, y_val = self.prepare_data(val_dataloader_dem, use_demographics=True)
+        X_test_dem, y_test = self.prepare_data(test_dataloader_dem, use_demographics=True)
+
+        print("\nLoad latent representations:")
+
+        train_dataloader_lat = self.data_module.train_dataloader(no_mci=True)
+        val_dataloader_lat = self.data_module.val_dataloader(no_mci=True)
+        test_dataloader_lat = self.data_module.test_dataloader(no_mci=True)
+        X_train_lat, _ = self.prepare_data(train_dataloader_lat, use_demographics=False)
+        X_val_lat, _ = self.prepare_data(val_dataloader_lat, use_demographics=False)
+        X_test_lat, _ = self.prepare_data(test_dataloader_lat, use_demographics=False)
+
+        # Concatenate demographic and latent features
+        X_train = np.concatenate((X_train_dem, X_train_lat), axis=1)
+        X_val = np.concatenate((X_val_dem, X_val_lat), axis=1)
+        X_test = np.concatenate((X_test_dem, X_test_lat), axis=1)
         
         clf = LogisticRegression(random_state=0).fit(X_train, y_train)
         
