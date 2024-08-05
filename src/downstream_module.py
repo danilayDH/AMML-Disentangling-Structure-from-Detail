@@ -6,21 +6,23 @@ from basic_vae_module import VAE
 from mri_data_module import MriDataModule
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import balanced_accuracy_score
+from sklearn.linear_model import LogisticRegression, RidgeCV
+from sklearn.metrics import balanced_accuracy_score, r2_score
 
 
 class DownstreamClassifier:
 
-    def __init__(self, checkpoint: str):
+    def __init__(self, checkpoint: str, is_ukbb: bool = False):
         self.checkpoint_path= "checkpoints/" + checkpoint + "/last.ckpt"
         self.checkpoint = checkpoint
+        self.is_ukbb = is_ukbb
         self.vae = VAE.load_from_checkpoint(self.checkpoint_path)
         self.vae.eval()
         for param in self.vae.parameters():
             param.requires_grad = False
 
-        self.data_module = MriDataModule(data_dir="src/adni.csv", batch_size=16, downstream_task=True)
+        self.data_module = MriDataModule(data_dir="src/ukbb_small.csv" if is_ukbb else "src/adni.csv", 
+                                         batch_size=16, downstream_task=True, is_ukbb=is_ukbb)
 
     def prepare_data(self, data_loader, use_demographics=False):
         X = []
@@ -54,33 +56,56 @@ class DownstreamClassifier:
         X_val, y_val = self.prepare_data(val_dataloader, use_demographics=True)
         X_test, y_test = self.prepare_data(test_dataloader, use_demographics=True)
         
-        clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+        if self.is_ukbb:
+            model = RidgeCV(alphas=[0.1, 1.0, 10.0])
+        else:
+            model = LogisticRegression(random_state=0)
+        
+        model.fit(X_train, y_train)
+        
+        y_pred_train = model.predict(X_train)
+        y_pred_val = model.predict(X_val)
+        y_pred_test = model.predict(X_test)
+        
+        if self.is_ukbb:
+            print("Demographics - Train Set Results:")
+            print("R2 Score on Train Set:", r2_score(y_train, y_pred_train))
+            
+            print("\nDemographics - Validation Set Results:")
+            print("R2 Score on Validation Set:", r2_score(y_val, y_pred_val))
+            
+            print("\nDemographics - Test Set Results:")
+            print("R2 Score on Test Set:", r2_score(y_test, y_pred_test))
+        else:
+            print("Demographics - Train Set Results:")
+            print("Balanced Accuracy on Train Set:", balanced_accuracy_score(y_train, y_pred_train))
+            
+            print("\nDemographics - Validation Set Results:")
+            print("Balanced Accuracy on Validation Set:", balanced_accuracy_score(y_val, y_pred_val))
+            
+            print("\nDemographics - Test Set Results:")
+            print("Balanced Accuracy on Test Set:", balanced_accuracy_score(y_test, y_pred_test))
+        
+        if self.is_ukbb:
+            np.save(self.checkpoint + "_ukbb_demographics_predict_probs.npy", y_pred_val)
+        else:
+            np.save(self.checkpoint + "_adni_demographics_predict_probs.npy", model.predict_proba(X_val))
         
        
-        y_pred_val = clf.predict(X_val)
-        y_pred_train = clf.predict(X_train)
-        print("Predictions on Validation Set:", y_pred_val)
-        score = clf.score(X_val, y_val)
-        print("Mean accuracy on Validation Set:", score)
-        balanced_acc = balanced_accuracy_score(y_val, y_pred_val)
-        print("Balanced Accuracy on Validation Set:", balanced_acc)
-        balanced_acc = balanced_accuracy_score(y_train, y_pred_train)
-        print("Balanced Accuracy on Train Set:", balanced_acc)
-        y_pred_test = clf.predict(X_test)
-        balanced_acc = balanced_accuracy_score(y_test, y_pred_test)
-        print("Balanced Accuracy on Test Set:", balanced_acc)
-        y_pred_prob = clf.predict_proba(X_val)
-        
-        np.save(self.checkpoint + "_demographics_predict_probs.npy", y_pred_prob)
-        print("Prediction probabilities on Validation Set:", y_pred_prob)
-
     def predict_using_vae(self, use_test_set: bool=False):
-        if os.path.exists(self.checkpoint + "_demographics_predict_probs.npy"):
+        if self.is_ukbb:
+            pred_file = self.checkpoint + "_ukbb_demographics_predict_probs.npy"
+        else:
+            pred_file = self.checkpoint + "_adni_demographics_predict_probs.npy"
+        
+        
+        if os.path.exists(pred_file):
             demographics_pred_prob = np.load(self.checkpoint + "_demographics_predict_probs.npy")
             print("Predictions on Validation Set based on demographics:", demographics_pred_prob)
         else:
             print("Demographics predictions not found.")
             return
+        
         print("Predict using VAE and demographics:")
         print("\nLoad demographics:")
         train_dataloader_dem = self.data_module.train_dataloader(no_mci=True, use_demographics=True)
@@ -105,43 +130,46 @@ class DownstreamClassifier:
         X_val = np.concatenate((X_val_dem, X_val_lat), axis=1)
         X_test = np.concatenate((X_test_dem, X_test_lat), axis=1)
         
-        clf = LogisticRegression(random_state=0).fit(X_train, y_train)
+        if self.is_ukbb:
+            model = RidgeCV(alphas=[0.1, 1.0, 10.0])
+        else:
+            model = LogisticRegression(random_state=0)
         
-        # Evaluate on training set
-        y_pred_train = clf.predict(X_train)
-        score = clf.score(X_train, y_train)
-        print("VAE - Train Set Results:")
-        print("Mean accuracy on Training Set:", score)
-        balanced_acc = balanced_accuracy_score(y_train, y_pred_train)
-        print("Balanced Accuracy on Training Set:", balanced_acc)
+        model.fit(X_train, y_train)
+        
+        y_pred_train = model.predict(X_train)
+        y_pred_val = model.predict(X_val)
+        y_pred_test = model.predict(X_test)
+        
+        if self.is_ukbb:
+            print("VAE - Train Set Results:")
+            print("R2 Score on Training Set:", r2_score(y_train, y_pred_train))
 
-        # Evaluate on validation set
-        y_pred_val = clf.predict(X_val)
-        score = clf.score(X_val, y_val)
-        print("\nVAE - Validation Set Results:")
-        print("Mean accuracy on Validation Set:", score)
-        balanced_acc = balanced_accuracy_score(y_val, y_pred_val)
-        print("Balanced Accuracy on Validation Set:", balanced_acc)
+            print("\nVAE - Validation Set Results:")
+            print("R2 Score on Validation Set:", r2_score(y_val, y_pred_val))
 
-        # Evaluate on test set
-        y_pred_test = clf.predict(X_test)
-        score = clf.score(X_test, y_test)
-        print("\nVAE - Test Set Results:")
-        print("Mean accuracy on Test Set:", score)
-        balanced_acc = balanced_accuracy_score(y_test, y_pred_test)
-        print("Balanced Accuracy on Test Set:", balanced_acc)
+            print("\nVAE - Test Set Results:")
+            print("R2 Score on Test Set:", r2_score(y_test, y_pred_test))
+        else:
+            print("VAE - Train Set Results:")
+            print("Balanced Accuracy on Training Set:", balanced_accuracy_score(y_train, y_pred_train))
 
-        # y_pred_prob = clf.predict_proba(X_val)
-        # y_pred_prob = y_pred_prob - demographics_pred_prob
-        # y_pred = np.where(y_pred_prob[:, 1] > y_pred_prob[:, 0], 1, 0)
+            print("\nVAE - Validation Set Results:")
+            print("Balanced Accuracy on Validation Set:", balanced_accuracy_score(y_val, y_pred_val))
+
+            print("\nVAE - Test Set Results:")
+            print("Balanced Accuracy on Test Set:", balanced_accuracy_score(y_test, y_pred_test))
+    
+    
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Predicting Dementia with help of VAE")
     parser.add_argument("checkpoint", type=str, help="Checkpoint id")
+    parser.add_argument("--is_ukbb", action="store_true", help="Use UKBB dataset")
     args = parser.parse_args()
     from lightning_fabric.utilities.seed import seed_everything
     seed_everything(176988783, workers=True)
-    downstream_task = DownstreamClassifier(args.checkpoint)
+    downstream_task = DownstreamClassifier(args.checkpoint, is_ukbb=args.is_ukbb)
     downstream_task.predict_using_demographics()
     downstream_task.predict_using_vae()

@@ -48,6 +48,7 @@ def cli_main():
         
     data_module = cli.datamodule
     num_folds = data_module.num_folds
+    is_ukbb = data_module.is_ukbb
 
     all_fold_metrics = []
 
@@ -58,7 +59,7 @@ def cli_main():
 
         # Create new data module instance for current fold
         data_module = MriDataModule(data_dir=data_module.data_dir, batch_size=data_module.batch_size,
-                                    fold=fold_idx, num_folds=num_folds, test_ratio=data_module.test_ratio)
+                                    fold=fold_idx, num_folds=num_folds, test_ratio=data_module.test_ratio, is_ukbb=is_ukbb)
         
         # Reset data loaders
         data_module.setup(stage='fit')

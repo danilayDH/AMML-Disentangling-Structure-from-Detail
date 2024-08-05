@@ -10,11 +10,11 @@ IMAGE_SIZE = 176
 
 class MriDataset(torch_data.Dataset):
 
-    def __init__(self, data, axis_view="coronal", use_demographics: bool = False, transform=None):
+    def __init__(self, data, axis_view="coronal", use_demographics: bool = False, transform=None, is_ukbb: bool = False):
         self.data = data
         self.use_demographics = use_demographics
-       
         self.transform = transform
+        self.is_ukbb = is_ukbb
 
         if axis_view not in ["axial", "sagittal", "coronal"]:
             raise ValueError("axis_view must be one of 'axial', 'sagittal', or 'coronal'.")
@@ -58,21 +58,22 @@ class MriDataset(torch_data.Dataset):
 
     def __getitem__(self, idx):
         row = self.data.iloc[idx]
-        dx = str(row['DX'])
 
-        label = 0
-        if dx == 'CN':
-            label = 0
-        elif dx == "Dementia":
-            label = 1
+        if self.is_ukbb:
+            label = float(row['BMI'])
         else:
-            pass
-            # warnings.warn("DX must be either CN or Dementia, not " + dx)
+            dx = str(row['DX'])
+            label = 0 if dx == 'CN' else 1 if dx == 'Dementia' else None
+            if label is None:
+                warnings.warn("DX must be either CN or Dementia, not " + dx)
       
         if self.use_demographics:
-            sex = torch.tensor(1.0 if row['Sex'] == 'M' else 0.0, dtype=torch.float32)  # Convert 'M' to 1.0 (male) and 'F' to 0.0 (female)
+            if self.is_ukbb:
+                sex = torch.tensor(row['Sex'], dtype=torch.float32)
+            else:
+                sex = torch.tensor(1.0 if row['Sex'] == 'M' else 0.0, dtype=torch.float32)  # Convert 'M' to 1.0 (male) and 'F' to 0.0 (female)
             age = torch.tensor(row['Age'], dtype=torch.float32)  # Assuming 'age' is an integer column
-            return torch.tensor([sex, age]), label
+            return torch.tensor([sex, age]), label  
 
         path_scan = Path(row['filepath'])
 

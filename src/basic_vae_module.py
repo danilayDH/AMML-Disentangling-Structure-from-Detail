@@ -249,6 +249,7 @@ class VAE(LightningModule):
 
         parser.add_argument("--num_workers", type=int, default=8)
         parser.add_argument("--data_dir", type=str, default=".")
+        parser.add_argument("--is_ukbb", type=bool, default=False)
 
         parser.add_argument("--use_segmentation_masks", type=str, default="no_mask",
                             choices=["in_encoder", "in_decoder", "no_mask", "separate_encoder"])
