@@ -78,9 +78,14 @@ class MriDataset(torch_data.Dataset):
             label = float(row[self.label_column])
         else:
             dx = str(row[self.label_column])
-            label = 0 if dx == 'CN' else 1 if dx == 'Dementia' else None
-            if label is None:
-                warnings.warn("DX must be either CN or Dementia, not " + dx)
+            label = 0
+            if dx == 'CN':
+                label = 0
+            elif dx == "Dementia":
+                label = 1
+            else:
+                pass
+                #warnings.warn("DX must be either CN or Dementia, not " + dx)
 
         if not MriDataset.label_column_printed:
             print(f"Label is taken from column: {self.label_column}")

@@ -46,7 +46,7 @@ class VAE(LightningModule):
             maxpool1: bool = False,
             enc_out_dim: int = 512,
             kl_coeff: float = 0.0001,
-            latent_dim: int = 64,
+            latent_dim: int = 128,
             lr: float = 0.0001,
             use_segmentation_masks: str = "no_mask",
             **kwargs,
@@ -250,8 +250,12 @@ class VAE(LightningModule):
         parser.add_argument("--num_workers", type=int, default=8)
         parser.add_argument("--data_dir", type=str, default=".")
         parser.add_argument("--is_ukbb", type=bool, default=False)
+        parser.add_argument("--label_column", type=str, default=None, help="Column name for the label")
+
 
         parser.add_argument("--use_segmentation_masks", type=str, default="no_mask",
                             choices=["in_encoder", "in_decoder", "no_mask", "separate_encoder"])
+        
+        #parser.add_argument("--seed", type=int, default=176988783, help="Random seed")
 
         return parser

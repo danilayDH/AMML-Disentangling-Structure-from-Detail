@@ -8,7 +8,7 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 1, test_ratio: float = 0.20, 
+    def __init__(self, data_dir: str = "src/adni_small.csv", batch_size: int = 4, fold:int = 0, num_folds: int = 1, test_ratio: float = 0.20, 
                  val_ratio : float = 0.15, is_ukbb: bool = False, label_column: str = None):
         """
         Args:
@@ -50,13 +50,14 @@ class MriDataModule(pl.LightningDataModule):
         pass
 
     def _remove_nan_and_mci(self, data, no_mci=False):
+        print(f"Columns in data: {data.columns}")
         nan_count = data[self.label_column].isna().sum()
         print(f"Number of NaN values in {self.label_column}: {nan_count}. Removing those before creating the dataset.")
         data = data.dropna(subset=[self.label_column])
 
         if not self.is_ukbb and no_mci:
             data = data[data[self.label_column] != 'MCI']
-        
+           
         return data.reset_index(drop=True)
 
     def train_dataloader(self, no_mci: bool = False, use_demographics: bool = False, shuffle: bool = True):
@@ -64,6 +65,7 @@ class MriDataModule(pl.LightningDataModule):
 
         train_data = self.data[self.data[self.id_column].isin(self.train_subjects)]
         train_data = self._remove_nan_and_mci(train_data, no_mci)
+               
         train_dataset = MriDataset(train_data, axis_view="coronal", use_demographics=use_demographics, transform=None, 
                                    is_ukbb=self.is_ukbb, label_column=self.label_column)
 
