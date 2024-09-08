@@ -22,7 +22,7 @@ class DownstreamClassifier:
         for param in self.vae.parameters():
             param.requires_grad = False
 
-        self.data_module = MriDataModule(data_dir="src/ukbb_small.csv" if is_ukbb else "src/adni_small.csv", 
+        self.data_module = MriDataModule(data_dir="src/ukbb.csv" if is_ukbb else "src/adni.csv", 
                                          batch_size=16, is_ukbb=is_ukbb, label_column=label_column)
 
     def prepare_data(self, data_loader, use_demographics=False):

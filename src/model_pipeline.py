@@ -1,4 +1,5 @@
 import os
+import csv
 import wandb
 import argparse
 
@@ -32,7 +33,17 @@ def calculate_metrics(images, reconstructions):
         mse_list.append(mse)
         snr_list.append(snr)
     return torch.stack(mse_list).mean().item(), torch.stack(snr_list).mean().item()
+    
+def save_results_to_csv(checkpoint_dir, loger_id, results):
+    filename = f"{loger_id}_results.csv"
+    csv_path = os.path.join(checkpoint_dir, filename)
 
+    with open(csv_path, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(results.keys())
+        writer.writerows(zip(*results.values()))
+    
+    print(f"Results saved to: {csv_path}")
 
 class DownstreamClassifier:
 
@@ -46,7 +57,7 @@ class DownstreamClassifier:
         self.is_ukbb = is_ukbb
         self.label_column = label_column if is_ukbb else 'DX'
         self.data_module = MriDataModule(
-            data_dir="src/ukbb_small.csv" if is_ukbb else "src/adni_small.csv",
+            data_dir="src/ukbb.csv" if is_ukbb else "src/adni.csv",
             batch_size=16, is_ukbb=is_ukbb, label_column=self.label_column
         )
 
@@ -72,7 +83,6 @@ class DownstreamClassifier:
         return X, y
 
     def predict_using_demographics(self, use_test_set=False):
-        print("UKBB is: ", self.is_ukbb)
         print("\nPredict using demographics:")
         print("\nLoad demographics:")
         train_dataloader = self.data_module.train_dataloader(no_mci=True, use_demographics=True, shuffle=False)
@@ -82,29 +92,35 @@ class DownstreamClassifier:
         X_test, y_test = self.prepare_data(test_dataloader, use_demographics=True)
 
         model = RidgeCV(alphas=(0.1, 1.0, 10.0)) if self.is_ukbb else LogisticRegressionCV(random_state=0, class_weight='balanced')
-        print(model)
         model.fit(X_train, y_train)
         y_pred_train = model.predict(X_train)
         y_pred_test = model.predict(X_test)
 
+        results = {}
 
         if self.is_ukbb:
             print("\nDemographics - Train Set Results:")
             print("R2 Score on Train Set:", r2_score(y_train, y_pred_train))
+            results["Train Set"] = [r2_score(y_train, y_pred_train)]
             
             print("\nDemographics - Test Set Results:")
             print("R2 Score on Test Set:", r2_score(y_test, y_pred_test))
+            results["Test Set"] = [r2_score(y_test, y_pred_test)]
         else:
             print("\nDemographics - Train Set Results:")
             print("Balanced Accuracy on Train Set:", balanced_accuracy_score(y_train, y_pred_train))
+            results["Train Set"] = [balanced_accuracy_score(y_train, y_pred_train)]
 
             print("\nDemographics - Test Set Results:")
             print("Balanced Accuracy on Test Set:", balanced_accuracy_score(y_test, y_pred_test))
+            results["Test Set"] = [balanced_accuracy_score(y_test, y_pred_test)]
 
         if self.is_ukbb:
             np.save(self.checkpoint + "_ukbb_demographics_predict_probs.npy", y_pred_test)
         else:
             np.save(self.checkpoint + "_adni_demographics_predict_probs.npy", model.predict_proba(X_test))
+        
+        return results
 
     def predict_using_vae(self, use_test_set=False):
         print("\nPredict using VAE:")
@@ -120,20 +136,26 @@ class DownstreamClassifier:
         y_pred_train = model.predict(X_train)
         y_pred_test = model.predict(X_test)
 
-        print("UKBB is: ", self.is_ukbb)
+        results = {}
 
         if self.is_ukbb:
             print("\nVAE - Train Set Results:")
             print("R2 Score on Training Set:", r2_score(y_train, y_pred_train))
+            results["Train Set"] = [r2_score(y_train, y_pred_train)]
 
             print("\nVAE - Test Set Results:")
             print("R2 Score on Test Set:", r2_score(y_test, y_pred_test))
+            results["Test Set"] = [r2_score(y_test, y_pred_test)]
         else:
             print("\nVAE - Train Set Results:")
             print("Balanced Accuracy on Training Set:", balanced_accuracy_score(y_train, y_pred_train))
+            results["Train Set"] = [balanced_accuracy_score(y_train, y_pred_train)]
 
             print("\nVAE - Test Set Results:")
             print("Balanced Accuracy on Test Set:", balanced_accuracy_score(y_test, y_pred_test))
+            results["Test Set"] = [balanced_accuracy_score(y_test, y_pred_test)]
+        
+        return results
 
     def predict_using_both(self, use_test_set=False):
         print("\nPredict using VAE and demographics:")
@@ -157,28 +179,34 @@ class DownstreamClassifier:
         y_pred_train = model.predict(X_train)
         y_pred_test = model.predict(X_test)
 
+        results = {}
+
         if self.is_ukbb:
             print("\nVAE & demographics- Train Set Results:")
             print("R2 Score on Training Set:", r2_score(y_train, y_pred_train))
+            results["Test Set"] = [r2_score(y_test, y_pred_test)]
 
             print("\nVAE & demographics - Test Set Results:")
             print("R2 Score on Test Set:", r2_score(y_test, y_pred_test))
+            results["Train Set"] = [r2_score(y_train, y_pred_train)]
         else:
             print("\nVAE & demographics - Train Set Results:")
             print("Balanced Accuracy on Training Set:", balanced_accuracy_score(y_train, y_pred_train))
+            results["Train Set"] = [balanced_accuracy_score(y_train, y_pred_train)]
 
             print("\nVAE & demographics - Test Set Results:")
             print("Balanced Accuracy on Test Set:", balanced_accuracy_score(y_test, y_pred_test))
+            results["Test Set"] = [balanced_accuracy_score(y_test, y_pred_test)]
+        
 
         print("\nAnalyzing correlation between latent representations and age and sex:")
-
         lr_model = LinearRegression()
         r2_score_train = lr_model.fit(X_train_lat, X_train_dem).score(X_train_lat, X_train_dem)
-
         print("R2 score for predicting demographics from latent representations (train set):", r2_score_train)
-
         r2_score_test = lr_model.score(X_test_lat, X_test_dem)
         print("R2 score for predicting demographics from latent representatios (test set):", r2_score_test)
+
+        return results
 
 def cli_main():
     torch.set_float32_matmul_precision('medium')
@@ -199,15 +227,13 @@ def cli_main():
         seed = cli.config['seed_everything']
         from lightning_fabric.utilities.seed import seed_everything
         seed_everything(seed, workers=True)
-         
-        
+    
     data_module = cli.datamodule
     num_folds = data_module.num_folds
     is_ukbb = data_module.is_ukbb
 
     all_fold_metrics = []
-
-
+    
     # Iterate over folds
     for fold_idx in range(data_module.num_folds):
         # Print current fold number
@@ -304,7 +330,6 @@ def cli_main():
         final_avg_mse = sum(f['mse'] for f in all_fold_metrics) / num_folds
         final_avg_snr = sum(f['snr'] for f in all_fold_metrics) / num_folds
         
-
         print(f"Final Average MSE: {final_avg_mse}, Final Average SNR: {final_avg_snr}")
         wandb.log({'final_avg_mse': final_avg_mse, 'final_avg_snr': final_avg_snr})
 
@@ -316,16 +341,45 @@ def cli_main():
     # Downstream tasks on both ADNI and UKBB data
     print("\nPerforming downstream tasks on ADNI data:")
     classifier_adni = DownstreamClassifier(trained_vae, checkpoint_dir, is_ukbb=False)
-    classifier_adni.predict_using_demographics()
-    classifier_adni.predict_using_vae()
-    classifier_adni.predict_using_both()
+    adni_results = {
+        "DX_demographics": classifier_adni.predict_using_demographics(),
+        "DX_vae": classifier_adni.predict_using_vae(),
+        "DX_both": classifier_adni.predict_using_both()  
+        }
+
+    final_results = {
+        "DX_demographics": [adni_results["DX_demographics"]["Train Set"][0], adni_results["DX_demographics"]["Test Set"][0]],
+        "DX_vae": [adni_results["DX_vae"]["Train Set"][0], adni_results["DX_vae"]["Test Set"][0]],
+        "DX_both": [adni_results["DX_both"]["Train Set"][0], adni_results["DX_both"]["Test Set"][0]],
+        }
+
+    label_columns = [
+        'Diastolic_blood_pressure_automated_reading',
+        'Systolic_blood_pressure_automated_reading',
+        'BMI',
+        'LDL_direct',
+        'HDL_cholesterol',
+        'Testosterone',
+        'Pulse_rate_automated_reading'
+        ]
 
     print("\nPerforming downstream tasks on UKBB data:")
-    classifier_ukbb = DownstreamClassifier(trained_vae, checkpoint_dir, is_ukbb=True, 
-                                           label_column=cli.config['data']['label_column'])
-    classifier_ukbb.predict_using_demographics()
-    classifier_ukbb.predict_using_vae()
-    classifier_ukbb.predict_using_both()
+    #ukbb_results = {}
+    for label_column in label_columns:
+        print("\nRunning downstream task for label column:", {label_column})        
+        classifier_ukbb = DownstreamClassifier(trained_vae, checkpoint_dir, is_ukbb=True, 
+                                           label_column=label_column)
+        # Collect results for each method in a loop
+        for method in ["demographics", "vae", "both"]:
+            method_name = f"{label_column}_{method}"
+            result = getattr(classifier_ukbb, f"predict_using_{method}")()
 
+            # Store results in final_results
+            final_results[method_name] = [result["Train Set"][0], result["Test Set"][0]]
+    
+    save_results_to_csv(checkpoint_dir, logger.experiment.id, final_results)
+        
+
+        
 if __name__ == '__main__':
     cli_main()
