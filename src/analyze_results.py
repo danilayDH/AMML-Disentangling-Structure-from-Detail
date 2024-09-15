@@ -29,9 +29,9 @@ def calculate_stats(df):
 
 def format_results(stats, set_name):
     print(f"\n{set_name} Set Results:")
-    print("=" * 80)
-    print(f"{'Label':<40} {'Demographics':<20} {'VAE':<20} {'Both':<20}")
-    print("-" * 80)
+    print("=" * 100)
+    print(f"{'Label':<50} {'Demographics':<20} {'VAE':<15} {'Both':<10}")
+    print("-" * 100)
     
     for label in stats.index:
         if label.endswith('demographics'):
@@ -40,7 +40,7 @@ def format_results(stats, set_name):
             vae_mean, vae_std = stats.loc[f"{base_label}vae", 'Mean'], stats.loc[f"{base_label}vae", 'Std']
             both_mean, both_std = stats.loc[f"{base_label}both", 'Mean'], stats.loc[f"{base_label}both", 'Std']
             
-            print(f"{base_label:<40} {demo_mean:.4f} ± {demo_std:.4f}  {vae_mean:.4f} ± {vae_std:.4f}  {both_mean:.4f} ± {both_std:.4f}")
+            print(f"{base_label:<50} {demo_mean:.3f} ± {demo_std:.3f}  {vae_mean:.3f} ± {vae_std:.3f}  {both_mean:.3f} ± {both_std:.3f}")
 
 def analyze_results(seed1_file, seed2_file, seed3_file):
     # read CSV files
@@ -63,19 +63,19 @@ def main(seed1_file, seed2_file, seed3_file):
 if __name__ == "__main__":
         file_paths = {
         'no_mask': {
-            'seed1': 'checkpoints/7jgr9z7u/7jgr9z7u_results.csv',
-            'seed2': 'checkpoints/xqaua5kl/xqaua5kl_results.csv',
-            'seed3': 'checkpoints/kwgiinvi/kwgiinvi_results.csv'
+            'seed1': 'checkpoints/06bqlwhr/06bqlwhr_results.csv',
+            'seed2': 'checkpoints/xqyhte28/xqyhte28_results.csv',
+            'seed3': 'checkpoints/y0ujzm8r/y0ujzm8r_results.csv'
         },
         'in_encoder': {
-            'seed1': 'checkpoints/7jgr9z7u/7jgr9z7u_results.csv',
-            'seed2': 'checkpoints/xqaua5kl/xqaua5kl_results.csv',
-            'seed3': 'checkpoints/kwgiinvi/kwgiinvi_results.csv'
+            'seed1': 'checkpoints/863ju0oj/863ju0oj_results.csv',
+            'seed2': 'checkpoints/uncc6psz/uncc6psz_results.csv',
+            'seed3': 'checkpoints/djtvs3fp/djtvs3fp_results.csv'
         },
         'separate_encoder': {
-            'seed1': 'checkpoints/7jgr9z7u/7jgr9z7u_results.csv',
-            'seed2': 'checkpoints/xqaua5kl/xqaua5kl_results.csv',
-            'seed3': 'checkpoints/kwgiinvi/kwgiinvi_results.csv'
+            'seed1': 'checkpoints/1xz1mlxl/1xz1mlxl_results.csv',
+            'seed2': 'checkpoints/luqlp9d5/luqlp9d5_results.csv',
+            'seed3': 'checkpoints/0je1259s/0je1259s_results.csv'
         }
     }
         # Analyze results for each VAE type
