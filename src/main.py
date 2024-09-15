@@ -74,7 +74,7 @@ def cli_main():
         cli.trainer.callbacks = []  # Clear existing callbacks
 
         # Determine which dataloader to use for reconstructions
-        recon_dataloader = data_module.val_dataloader() if data_module.num_folds > 1 else data_module.train_dataloader()
+        recon_dataloader = data_module.val_dataloader() if data_module.num_folds > 1 else data_module.test_dataloader()
        
         # Add ReconstructionsCallback
         reconstructions_callback = ReconstructionsCallback(
