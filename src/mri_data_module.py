@@ -8,8 +8,8 @@ from datasets import MriDataset
 
 
 class MriDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 32, fold:int = 0, num_folds: int = 1, test_ratio: float = 0.20, 
-                 val_ratio : float = 0.15, downstream_task: bool = False):
+    def __init__(self, data_dir: str = "src/adni.csv", batch_size: int = 4, fold:int = 0, num_folds: int = 1, test_ratio: float = 0.20, 
+                 val_ratio : float = 0.15, is_ukbb: bool = False, label_column: str = None):
         """
         Args:
             data_dir (str): The path to the CSV file containing the data.
@@ -27,12 +27,15 @@ class MriDataModule(pl.LightningDataModule):
         self.num_folds = num_folds
         self.test_ratio = test_ratio
         self.val_ratio = val_ratio
-        self.downstream_task = downstream_task
+        self.is_ukbb = is_ukbb
+        self.label_column = label_column or ('DX' if not is_ukbb else 'BMI') # default DX for ADNI and BMI for UKBB
         self.save_hyperparameters()
         self.data = pd.read_csv(data_dir)
     
-        self.subjects = self.data['PTID'].unique()
-
+        # Adjust column names based on the dataset
+        self.id_column = 'eid' if self.is_ukbb else 'PTID'
+        
+        self.subjects = self.data[self.id_column].unique()
         self.train_subjects, self.val_subjects, self.test_subjects = self.split_subjectwise()
 
         # Print out the lengths of train_subjects, val_subjects, and test_subjects
@@ -42,21 +45,28 @@ class MriDataModule(pl.LightningDataModule):
         print("Number of subjects in validation set:", len(self.val_subjects))
         print("Number of subjects in test set:", len(self.test_subjects))
 
+    
     def setup(self, stage: str):
         pass
 
-    def train_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
-        train_data = self.data[self.data['PTID'].isin(self.train_subjects)]       
+    def _remove_nan_and_mci(self, data, no_mci=False):
+        nan_count = data[self.label_column].isna().sum()
+        print(f"Number of NaN values in {self.label_column}: {nan_count}. Removing those before creating the dataset.")
+        data = data.dropna(subset=[self.label_column])
 
-        if no_mci:
-            train_data = train_data[train_data['DX'] != 'MCI']
-            nan_count = train_data['DX'].isna().sum()
-            print(f"Number of NaN values in DX: {nan_count}. Removing those before creating the train_dataset.")
-            train_data = train_data.dropna(subset=['DX'])
-        
-        train_data = train_data.reset_index(drop=True)
+        if not self.is_ukbb and no_mci:
+            data = data[data[self.label_column] != 'MCI']
+           
+        return data.reset_index(drop=True)
 
-        train_dataset = MriDataset(train_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
+    def train_dataloader(self, no_mci: bool = False, use_demographics: bool = False, shuffle: bool = True):
+        train_data = self.data[self.data[self.id_column].isin(self.train_subjects)]       
+
+        train_data = self.data[self.data[self.id_column].isin(self.train_subjects)]
+        train_data = self._remove_nan_and_mci(train_data, no_mci)
+               
+        train_dataset = MriDataset(train_data, axis_view="coronal", use_demographics=use_demographics, transform=None, 
+                                   is_ukbb=self.is_ukbb, label_column=self.label_column)
 
         print("Train dataset size: " + str(len(train_data)))
         print(f"Batch size in train_dataloader: {self.batch_size}") 
@@ -64,27 +74,21 @@ class MriDataModule(pl.LightningDataModule):
             dataset=train_dataset,
             batch_size=self.batch_size,
             num_workers=10,
-            shuffle=True,
+            shuffle=shuffle,
             drop_last=True 
         )
 
     def val_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
-        if self.num_folds == 1 and not self.downstream_task:
+        if self.num_folds == 1:
             return None
 
-        val_data = self.data[self.data['PTID'].isin(self.val_subjects)]
+        val_data = self.data[self.data[self.id_column].isin(self.val_subjects)]
 
-        if no_mci:
-            val_data = val_data[val_data['DX'] != 'MCI']
-            nan_count = val_data['DX'].isna().sum()
-            print(f"Number of NaN values in DX: {nan_count}. Removing those before creating the val_dataset.")
-            val_data = val_data.dropna(subset=['DX'])
-        
-        val_data = val_data.reset_index(drop=True)
-
-        val_dataset = MriDataset(val_data, axis_view="coronal",use_demographics=use_demographics, transform=None)
-        #print("Val dataset size: " + str(len(val_data)))
-        #print(f"Batch size in val_dataloader: {self.batch_size}") 
+        val_data = self.data[self.data[self.id_column].isin(self.val_subjects)]
+        val_data = self._remove_nan_and_mci(val_data, no_mci)
+        val_dataset = MriDataset(val_data, axis_view="coronal", use_demographics=use_demographics, transform=None, 
+                                   is_ukbb=self.is_ukbb, label_column=self.label_column)
+        print("Validation dataset size: " + str(len(val_data)))
         return DataLoader(
             dataset=val_dataset,
             batch_size=self.batch_size,
@@ -92,17 +96,13 @@ class MriDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
-        test_data = self.data[self.data['PTID'].isin(self.test_subjects)]
+        test_data = self.data[self.data[self.id_column].isin(self.test_subjects)]
              
-        if no_mci:
-            test_data = test_data[test_data['DX'] != 'MCI']
-            nan_count = test_data['DX'].isna().sum()
-            print(f"Number of NaN values in DX: {nan_count}. Removing those before creating the test_dataset.")
-            test_data = test_data.dropna(subset=['DX'])
+        test_data = self.data[self.data[self.id_column].isin(self.test_subjects)]
+        test_data = self._remove_nan_and_mci(test_data, no_mci)
+        test_dataset = MriDataset(test_data, axis_view="coronal", use_demographics=use_demographics, transform=None, 
+                                   is_ukbb=self.is_ukbb, label_column=self.label_column)
         
-        test_data = test_data.reset_index(drop=True)
-
-        test_dataset = MriDataset(test_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
         print("Test dataset size: " + str(len(test_data)))
         return DataLoader(
             test_dataset, 
@@ -110,16 +110,12 @@ class MriDataModule(pl.LightningDataModule):
             )
 
     def predict_dataloader(self, no_mci: bool = False, use_demographics: bool = False):
-        predict_data = self.data[self.data['PTID'].isin(self.val_subjects)]
+        predict_data = self.data[self.data[self.id_column].isin(self.val_subjects)]
         
-        if no_mci:
-            predict_data = predict_data[predict_data['DX'] != 'MCI']
-            nan_count = predict_data['DX'].isna().sum()
-            print(f"Number of NaN values in DX: {nan_count}. Removing those before creating the predict_dataset.")
-            predict_data = predict_data.dropna(subset=['DX'])
-
-        predict_data = predict_data.reset_index(drop=True)
-        predict_dataset = MriDataset(predict_data, axis_view="coronal", use_demographics=use_demographics, transform=None)
+        predict_data = self.data[self.data[self.id_column].isin(self.val_subjects)]
+        predict_data = self._remove_nan_and_mci(predict_data, no_mci)
+        predict_dataset = MriDataset(predict_data, axis_view="coronal", use_demographics=use_demographics, transform=None, 
+                                   is_ukbb=self.is_ukbb, label_column=self.label_column)
         return DataLoader(
             predict_dataset, 
             batch_size=self.batch_size,
@@ -149,14 +145,8 @@ class MriDataModule(pl.LightningDataModule):
         remaining_subjects = np.delete(self.subjects, test_indices)
 
         if self.num_folds == 1:
-            if self.downstream_task:
-                val_size = int(self.val_ratio * len(remaining_subjects))
-                val_indices = np.random.choice(len(remaining_subjects), size=val_size, replace=False)
-                val_subjects = remaining_subjects[val_indices]
-                train_subjects = np.delete(remaining_subjects, val_indices)
-            else:
-                train_subjects = remaining_subjects
-                val_subjects = []
+            train_subjects = remaining_subjects
+            val_subjects = []
         else: 
             kfold = KFold(n_splits=self.num_folds, shuffle=False)
             train_val_indices = np.where(np.isin(self.subjects, remaining_subjects))[0]

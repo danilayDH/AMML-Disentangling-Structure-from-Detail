@@ -9,16 +9,31 @@ import torch.utils.data as torch_data
 IMAGE_SIZE = 176
 
 class MriDataset(torch_data.Dataset):
+    label_column_printed = False # Class-level attribute to track if label column in ukbb has been printed
 
-    def __init__(self, data, axis_view="coronal", use_demographics: bool = False, transform=None):
+    def __init__(self, data, axis_view="coronal", use_demographics: bool = False, transform=None, is_ukbb: bool = False, 
+                 label_column: str = None):
         self.data = data
         self.use_demographics = use_demographics
-       
         self.transform = transform
+        self.is_ukbb = is_ukbb
+        self.label_column = label_column or ('DX' if not is_ukbb else 'BMI')
+
+        if self.use_demographics:
+            if self.is_ukbb:
+                self.mean_sex = data['Sex'].mean()
+                self.std_sex = data['Sex'].std()
+            else:
+                self.mean_sex = data['Sex'].apply(lambda x: 1.0 if x == 'M' else 0.0).mean()
+                self.std_sex = data['Sex'].apply(lambda x: 1.0 if x == 'M' else 0.0).std()
+            
+            self.mean_age = data['Age'].mean()
+            self.std_age = data['Age'].std()
 
         if axis_view not in ["axial", "sagittal", "coronal"]:
             raise ValueError("axis_view must be one of 'axial', 'sagittal', or 'coronal'.")
         self.axis_view = axis_view
+        
 
         self.labels_dict = {0: 'background',
                             2: 'left cerebral white matter',
@@ -58,21 +73,31 @@ class MriDataset(torch_data.Dataset):
 
     def __getitem__(self, idx):
         row = self.data.iloc[idx]
-        dx = str(row['DX'])
 
-        label = 0
-        if dx == 'CN':
-            label = 0
-        elif dx == "Dementia":
-            label = 1
+        if self.is_ukbb:
+            label = float(row[self.label_column])
         else:
-            pass
-            # warnings.warn("DX must be either CN or Dementia, not " + dx)
+            dx = str(row[self.label_column])
+            label = 0
+            if dx == 'CN':
+                label = 0
+            elif dx == "Dementia":
+                label = 1
+            else:
+                pass
+                #warnings.warn("DX must be either CN or Dementia, not " + dx)
+
+        if not MriDataset.label_column_printed:
+            print(f"Label is taken from column: {self.label_column}")
+            MriDataset.label_column_printed = True
       
         if self.use_demographics:
-            sex = torch.tensor(1.0 if row['Sex'] == 'M' else 0.0, dtype=torch.float32)  # Convert 'M' to 1.0 (male) and 'F' to 0.0 (female)
-            age = torch.tensor(row['Age'], dtype=torch.float32)  # Assuming 'age' is an integer column
-            return torch.tensor([sex, age]), label
+            if self.is_ukbb:
+                sex = torch.tensor((row['Sex'] - self.mean_sex) / (self.std_sex + 1e-7), dtype=torch.float32)
+            else:
+                sex = torch.tensor((1.0 if row['Sex'] == 'M' else 0.0 - self.mean_sex) / (self.std_sex + 1e-7), dtype=torch.float32)  # Convert 'M' to 1.0 (male) and 'F' to 0.0 (female)
+            age = torch.tensor((row['Age'] - self.mean_age) / (self.std_age + 1e-7), dtype=torch.float32)  # Assuming 'age' is an integer column
+            return torch.tensor([sex, age]), label  
 
         path_scan = Path(row['filepath'])
 
