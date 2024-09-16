@@ -21,7 +21,7 @@ With this code you can...
 - Train a VAE with a lot of different configurations
 - Running hyperparameter sweeps from wandb
 - Train a dementia classifier which uses latent representations from a VAE as input
-- Train a model pipeline that trains a VAE with a lot of different configurations and perform downstream task on both ADNI data and UKBB data
+- Train a model pipeline which trains a VAE with a lot of different configurations and performs downstream task on both ADNI data and UKBB data
 
 ### Training VAEs
 
