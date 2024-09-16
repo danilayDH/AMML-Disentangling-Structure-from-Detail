@@ -79,5 +79,5 @@ As before, make sure that the checkpoint you want to test is located in `checkpo
 
 To run the whole model pipeline you can do it like this:
 
-`sbatch scripts/run_both.sh --data.batch_size=32 --model.use_segmentation_masks="separate_encoder" --trainer.max_epochs=30 --seed_everything <seed_nr>
+`sbatch scripts/run_both.sh --data.batch_size=32 --model.use_segmentation_masks="separate_encoder" --trainer.max_epochs=30 --seed_everything <seed_nr>`
 
