@@ -1,14 +1,14 @@
-# Disentangling Structure from Detail for Dementia Prediction
+# Disentangling Detail from Structure in Brain MRIs 
 
-This repository contains the code for our project in the Advanced Machine Learning Seminar at HPI.
-We wanted to find out if providing segmentation masks as additional input to Variational Autoencoders can help to capture more relevant details for dementia prediction.
+This repository contains the code for our project in the Advanced Medical Machine Learning Seminar at HPI.
+We wanted to find out if providing segmentation masks as additional input to Variational Autoencoders can help to capture more relevant details for dementia prediction and the prediction of multiple health-related traits from the UK Biobank, such as blood pressure, body mass index (BMI), and cholesterol levels.
 
 To learn more about the project and our findings, please read the report in `report/report.pdf`.
 
 ## Prerequisites
 
-In order to run this code you need access to a subset of the ADNI dataset which includes segmentation masks of the brain scans.
-The Fachgebiet Lippert of HPI has this dataset available on the HPC of the Dhclab. Checkout `src/adni.csv` to see where the dataset is stored.
+In order to run this code you need access to a subset of the ADNI dataset and UKBB dataset which includes segmentation masks of the brain scans.
+The Fachgebiet Lippert of HPI has this dataset available on the HPC of the Dhclab. Checkout `src/adni.csv` and `src/ukbb.csv` to see where the dataset is stored.
 
 ### Setup and installation
 
@@ -21,6 +21,7 @@ With this code you can...
 - Train a VAE with a lot of different configurations
 - Running hyperparameter sweeps from wandb
 - Train a dementia classifier which uses latent representations from a VAE as input
+- Train a model pipeline that trains a VAE with a lot of different configurations and perform downstream task on both ADNI data and UKBB data
 
 ### Training VAEs
 
@@ -52,7 +53,11 @@ If you are done with training a VAE you can evaluate it with the downstream task
 To train the downstream task, you can use the script 'downstream_module.py'. Make sure to have a checkpoint `last.ckpt` placed in `checkpoints/RUN_ID/`.
 You can start the script by running:
 
-`sbatch scripts/downstream.sh <RUN_ID>`
+`sbatch scripts/downstream.sh <RUN_ID> `
+
+To use UKBB data you can start the script like this:
+
+`sbatch scripts/downstream.sh <RUN_ID> --is_ukbb --label_column <NAME OF COLUMN YOU WANT TO PREDICT>`
 
 Note that the output will not be logged to wandb. Instead, you will find the output in the `slogs` directory.
 
@@ -69,3 +74,10 @@ To evaluate your final model based on unseen testing data, you can simply run
 `sbatch scripts/test_vae.sh <RUN_ID>`
 
 As before, make sure that the checkpoint you want to test is located in `checkpoints/RUN_ID/last.ckpt`.
+
+### Runnin the model pipeline
+
+To run the whole model pipeline you can do it like this:
+
+`sbatch scripts/run_both.sh --data.batch_size=32 --model.use_segmentation_masks="separate_encoder" --trainer.max_epochs=30 --seed_everything <seed_nr>
+
